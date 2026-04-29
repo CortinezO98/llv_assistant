@@ -199,6 +199,8 @@ class AIOrchestrator:
         actions = {
             "identify_patient":       self._action_identify_patient,
             "schedule_appointment":   self._action_schedule_appointment,
+            "register_delivery":      self._action_register_delivery,
+            "register_shipment":      self._action_register_shipment,
             "send_payment_link":      self._action_send_payment_link,
             "escalate_to_agent":      self._action_escalate_to_agent,
             "register_payment_proof": self._action_register_payment_proof,
@@ -243,6 +245,112 @@ class AIOrchestrator:
                 f"precios, disponibilidad o agendar una valoración. 💚"
             )
         return OrchestratorResult(reply=reply, action_taken="identify_patient", success=True)
+
+    # ── Acción: entrega local PR ─────────────────────────────────────────────
+    def _action_register_delivery(self, args: dict, patient: Patient, session: Session) -> OrchestratorResult:
+        from app.db.models.delivery import Delivery
+
+        delivery_town = args.get("delivery_town", "").strip()
+        service       = args.get("service_treatment", "").strip()
+
+        if not delivery_town:
+            return OrchestratorResult(
+                reply="Para coordinar tu entrega necesito saber en qué *pueblo de Puerto Rico* te la entregamos. ¿Cuál es?",
+                action_taken="delivery_missing_town", success=False
+            )
+        if not service:
+            return OrchestratorResult(
+                reply="¿Cuál es el tratamiento o kit que deseas pedir? (ej: Semaglutide 0.5 MG, Kit 1 mes)",
+                action_taken="delivery_missing_service", success=False
+            )
+
+        delivery = Delivery(
+            patient_id        = patient.id,
+            session_id        = session.id,
+            patient_name      = args.get("patient_name", patient.full_name or ""),
+            phone             = args.get("phone", patient.whatsapp_number),
+            service_treatment = service,
+            amount_to_pay     = args.get("amount_to_pay"),
+            delivery_town     = delivery_town,
+            status            = "pending",
+        )
+        self.db.add(delivery)
+        patient.is_recurrent = 1
+        self.db.flush()
+
+        self.analytics.track("delivery_created", session_id=session.id, patient_id=patient.id, service=service, town=delivery_town)
+
+        reply = (
+            f"✅ ¡Registré tu pedido de entrega!\n\n"
+            f"📋 *Resumen:*\n"
+            f"• Nombre: {delivery.patient_name}\n"
+            f"• Tratamiento: {service}\n"
+            f"• Pueblo de entrega: {delivery_town}\n"
+            f"{'• Monto a pagar: $' + str(delivery.amount_to_pay) + ' USD' + chr(10) if delivery.amount_to_pay else ''}\n"
+            f"Nuestro equipo coordinará la entrega contigo pronto. 💙\n\n"
+            f"¿Deseas proceder con el pago ahora o tienes alguna pregunta adicional?"
+        )
+        return OrchestratorResult(reply=reply, action_taken="delivery_created", success=True)
+
+    # ── Acción: envío postal ─────────────────────────────────────────────────
+    def _action_register_shipment(self, args: dict, patient: Patient, session: Session) -> OrchestratorResult:
+        from app.db.models.delivery import Shipment
+
+        postal_address = args.get("postal_address", "").strip()
+        service        = args.get("service_treatment", "").strip()
+
+        if not postal_address:
+            return OrchestratorResult(
+                reply=(
+                    "Para coordinar tu envío necesito tu *dirección postal completa*. "
+                    "Por favor comparte:\n"
+                    "• Dirección (calle, número, apt)\n"
+                    "• Ciudad / Municipio\n"
+                    "• Estado / Provincia\n"
+                    "• País\n"
+                    "• Código postal"
+                ),
+                action_taken="shipment_missing_address", success=False
+            )
+        if not service:
+            return OrchestratorResult(
+                reply="¿Cuál es el tratamiento o kit que deseas pedir? (ej: Tirzepatide 5 MG, Kit 2 semanas)",
+                action_taken="shipment_missing_service", success=False
+            )
+
+        shipment = Shipment(
+            patient_id        = patient.id,
+            session_id        = session.id,
+            patient_name      = args.get("patient_name", patient.full_name or ""),
+            phone             = args.get("phone", patient.whatsapp_number),
+            email             = args.get("email"),
+            postal_address    = postal_address,
+            city              = args.get("city"),
+            state_province    = args.get("state_province"),
+            country           = args.get("country", "Puerto Rico"),
+            zip_code          = args.get("zip_code"),
+            service_treatment = service,
+            amount_paid       = args.get("amount_paid"),
+            status            = "pending",
+        )
+        self.db.add(shipment)
+        patient.is_recurrent = 1
+        self.db.flush()
+
+        self.analytics.track("shipment_created", session_id=session.id, patient_id=patient.id, service=service, country=shipment.country)
+
+        reply = (
+            f"✅ ¡Registré tu pedido de envío!\n\n"
+            f"📋 *Resumen:*\n"
+            f"• Nombre: {shipment.patient_name}\n"
+            f"• Tratamiento: {service}\n"
+            f"• Dirección: {postal_address}\n"
+            f"{'• Ciudad: ' + str(shipment.city) + chr(10) if shipment.city else ''}"
+            f"• País: {shipment.country}\n\n"
+            f"Te enviaremos el número de rastreo una vez despachado. 💙\n\n"
+            f"¿Deseas proceder con el pago ahora?"
+        )
+        return OrchestratorResult(reply=reply, action_taken="shipment_created", success=True)
 
     # ── Acción: agendar cita ─────────────────────────────────────────────────
     def _action_schedule_appointment(self, args: dict, patient: Patient, session: Session) -> OrchestratorResult:

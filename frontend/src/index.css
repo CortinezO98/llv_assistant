@@ -4,13 +4,15 @@
 
 @layer base {
   :root {
-    --brand: #1B5E3F;
-    --brand-light: #2a9d63;
-    --bg: #f8faf9;
-    --surface: #ffffff;
-    --border: #e4ede8;
-    --text: #0f1f17;
-    --text-muted: #6b8a78;
+    --brand:      #0b4c45;
+    --brand-mid:  #0d5c54;
+    --gold:       #C6A96B;
+    --cream:      #F5F1EB;
+    --bg:         #f8f6f2;
+    --surface:    #ffffff;
+    --border:     #e5ddd4;
+    --text:       #1a1208;
+    --text-muted: #7a6a55;
   }
 
   * { box-sizing: border-box; }
@@ -22,25 +24,27 @@
     -webkit-font-smoothing: antialiased;
   }
 
-  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
   ::-webkit-scrollbar-track { background: transparent; }
-  ::-webkit-scrollbar-thumb { background: #c8ddd3; border-radius: 3px; }
-  ::-webkit-scrollbar-thumb:hover { background: #1B5E3F; }
+  ::-webkit-scrollbar-thumb { background: #C6A96B55; border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: #C6A96B; }
 }
 
 @layer components {
   .card {
-    @apply bg-white rounded-2xl border border-[#e4ede8] shadow-sm;
+    @apply bg-white rounded-2xl border border-[#e5ddd4] shadow-sm;
   }
 
   .btn-primary {
-    @apply bg-brand-600 hover:bg-brand-700 text-white font-medium px-4 py-2 rounded-xl
-           transition-all duration-200 text-sm flex items-center gap-2 disabled:opacity-50;
+    @apply bg-[#0b4c45] hover:bg-[#0d5c54] text-white font-medium px-4 py-2 rounded-xl transition-all duration-200 text-sm flex items-center gap-2 disabled:opacity-50;
+  }
+
+  .btn-gold {
+    @apply bg-[#C6A96B] hover:bg-[#b8943a] text-white font-medium px-4 py-2 rounded-xl transition-all duration-200 text-sm flex items-center gap-2 disabled:opacity-50;
   }
 
   .btn-ghost {
-    @apply hover:bg-brand-50 text-brand-600 font-medium px-4 py-2 rounded-xl
-           transition-all duration-200 text-sm flex items-center gap-2;
+    @apply hover:bg-[#F5F1EB] text-[#0b4c45] font-medium px-4 py-2 rounded-xl transition-all duration-200 text-sm flex items-center gap-2;
   }
 
   .badge {
@@ -48,9 +52,7 @@
   }
 
   .input {
-    @apply w-full border border-[#e4ede8] rounded-xl px-3 py-2 text-sm
-           focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500
-           bg-white placeholder:text-[#6b8a78] transition-all;
+    @apply w-full border border-[#e5ddd4] rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#C6A96B]/30 focus:border-[#C6A96B] bg-white placeholder:text-[#7a6a55] transition-all;
   }
 
   .stat-card {
@@ -58,24 +60,22 @@
   }
 
   .nav-item {
-    @apply flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium
-           transition-all duration-150 cursor-pointer;
+    @apply flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 cursor-pointer;
   }
 
   .nav-item.active {
-    @apply bg-brand-600 text-white shadow-sm;
+    @apply bg-[#0b4c45] text-white shadow-sm;
   }
 
   .nav-item:not(.active) {
-    @apply text-[#6b8a78] hover:bg-brand-50 hover:text-brand-700;
+    @apply text-[#7a6a55] hover:bg-[#F5F1EB] hover:text-[#0b4c45];
   }
 
   .table-row {
-    @apply border-b border-[#e4ede8] last:border-0 hover:bg-brand-50/50 transition-colors;
+    @apply border-b border-[#e5ddd4] last:border-0 hover:bg-[#F5F1EB]/50 transition-colors;
   }
 }
 
-/* Animaciones */
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(8px); }
   to   { opacity: 1; transform: translateY(0); }

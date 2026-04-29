@@ -10,6 +10,7 @@ from app.api.routes.appointments  import appointments_router, patients_router
 from app.api.routes.auth          import router as auth_router
 from app.api.routes.conversations import router as conversations_router
 from app.api.routes.dashboard     import router as dashboard_router
+from app.api.routes.deliveries    import router as deliveries_router
 from app.api.routes.faq           import router as faq_router
 from app.api.routes.health        import router as health_router
 from app.api.routes.plan          import router as plan_router
@@ -26,14 +27,12 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info("🚀 Iniciando %s | env=%s", settings.app_name, settings.app_env)
+    logger.info("🚀 %s | env=%s", settings.app_name, settings.app_env)
     yield
-    logger.info("⏹️  Cerrando %s", settings.app_name)
 
 
 app = FastAPI(
     title=settings.app_name,
-    description="Chatbot IA para LRV Aesthetic & Wellness Clinic",
     version="1.0.0",
     debug=settings.app_debug,
     lifespan=lifespan,
@@ -60,3 +59,4 @@ app.include_router(plan_router)
 app.include_router(dashboard_router)
 app.include_router(reports_router)
 app.include_router(conversations_router)
+app.include_router(deliveries_router)
