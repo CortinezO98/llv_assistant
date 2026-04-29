@@ -52,25 +52,25 @@ class AnalyticsService:
         self.track("message_received", session_id=session_id, patient_id=patient_id, message_type=message_type)
 
     def faq_resolved(self, session_id, patient_id, question: str, category: str):
-        self.track("faq_resolved", session_id=session_id, patient_id=patient_id,question=question[:200], category=category)
+        self.track("faq_resolved", session_id=session_id, patient_id=patient_id, question=question[:200], category=category)
 
     def ai_response(self, session_id, patient_id, function_called: str | None = None):
-        self.track("ai_response", session_id=session_id, patient_id=patient_id,function_called=function_called or "text_response")
+        self.track("ai_response", session_id=session_id, patient_id=patient_id, function_called=function_called or "text_response")
 
     def agent_handoff(self, session_id, patient_id, agent_id, reason: str):
-        self.track("agent_handoff", session_id=session_id, patient_id=patient_id,agent_id=agent_id, reason=reason[:200])
+        self.track("agent_handoff", session_id=session_id, patient_id=patient_id, agent_id=agent_id, reason=reason[:200])
 
     def appointment_created(self, session_id, patient_id, service: str, clinic: str):
-        self.track("appointment_created", session_id=session_id, patient_id=patient_id,service=service[:200], clinic=clinic)
+        self.track("appointment_created", session_id=session_id, patient_id=patient_id, service=service[:200], clinic=clinic)
 
     def payment_sent(self, session_id, patient_id, method: str, product: str, amount: float | None = None):
-        self.track("payment_sent", session_id=session_id, patient_id=patient_id,method=method, product=product[:200], amount=amount)
+        self.track("payment_sent", session_id=session_id, patient_id=patient_id, method=method, product=product[:200], amount=amount)
 
     def payment_proof_received(self, session_id, patient_id):
         self.track("payment_proof_received", session_id=session_id, patient_id=patient_id)
 
     def payment_completed(self, session_id, patient_id, agent_id, amount: float | None = None):
-        self.track("payment_completed", session_id=session_id, patient_id=patient_id,agent_id=agent_id, amount=amount)
+        self.track("payment_completed", session_id=session_id, patient_id=patient_id, agent_id=agent_id, amount=amount)
 
     def session_completed(self, session_id, patient_id):
         self.track("session_completed", session_id=session_id, patient_id=patient_id)

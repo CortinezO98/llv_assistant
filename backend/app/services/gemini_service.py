@@ -168,8 +168,13 @@ _TOOLS = Tool(
 class GeminiService:
     def __init__(self):
         genai.configure(api_key=settings.gemini_api_key)
-        self._model = genai.GenerativeModel(
+        # Model se crea dinámicamente por conversación para poder inyectar
+        # el system_prompt con FAQ y contexto del paciente actualizado.
+
+    def _get_model(self, system_prompt: str) -> genai.GenerativeModel:
+        return genai.GenerativeModel(
             model_name=settings.gemini_model,
+            system_instruction=system_prompt,
             tools=[_TOOLS],
         )
 
@@ -236,10 +241,8 @@ class GeminiService:
             user_message = f"{user_message}\n[El cliente envió un archivo/imagen con ID: {media_id}]"
 
         try:
-            chat = self._model.start_chat(
-                history=gemini_history,
-                system_instruction=system_prompt,
-            )
+            model = self._get_model(system_prompt)
+            chat = model.start_chat(history=gemini_history)
             response = chat.send_message(user_message)
             candidate = response.candidates[0]
             part = candidate.content.parts[0]

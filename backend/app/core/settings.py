@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     @field_validator("allowed_origins", mode="before")
     @classmethod
     def parse_origins(cls, v: Any) -> list[str]:
+        """Acepta JSON array o cadena separada por comas."""
         if isinstance(v, list):
             return v
         if isinstance(v, str):

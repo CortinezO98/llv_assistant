@@ -16,7 +16,6 @@ def get_current_agent(
     payload = decode_token(token)
     if not payload:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token inválido")
-
     agent_id = int(payload.get("sub", 0))
     agent = db.query(Agent).filter(Agent.id == agent_id, Agent.is_active == 1).first()
     if not agent:
@@ -26,5 +25,16 @@ def get_current_agent(
 
 def require_admin(agent: Agent = Depends(get_current_agent)) -> Agent:
     if agent.role not in ("admin", "supervisor"):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Se requiere rol de administrador")
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Se requiere rol admin o supervisor")
+    return agent
+
+
+def require_supervisor(agent: Agent = Depends(get_current_agent)) -> Agent:
+    if agent.role not in ("admin", "supervisor"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Se requiere rol supervisor o admin")
+    return agent
+
+
+def require_agent_or_above(agent: Agent = Depends(get_current_agent)) -> Agent:
+    """Cualquier rol autenticado puede acceder."""
     return agent

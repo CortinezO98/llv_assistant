@@ -71,3 +71,14 @@ export const faqApi = {
 export const planApi = {
   getUsage: () => api.get('/plan/usage'),
 }
+
+// ── Conversations ─────────────────────────────────────────────────────────────
+export const conversationsApi = {
+  list: (status?: string) => api.get(`/conversations/${status ? `?status=${status}` : ''}`),
+  getMessages: (sessionId: number) => api.get(`/conversations/${sessionId}/messages`),
+  send: (sessionId: number, message: string) => api.post(`/conversations/${sessionId}/send`, { message }),
+  take: (sessionId: number) => api.post(`/conversations/${sessionId}/take`),
+  close: (sessionId: number) => api.post(`/conversations/${sessionId}/close`),
+  transfer: (sessionId: number, agentId: number) => api.post(`/conversations/${sessionId}/transfer`, { agent_id: agentId }),
+  myStats: () => api.get('/conversations/stats/me'),
+}

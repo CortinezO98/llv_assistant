@@ -6,8 +6,9 @@ import DashboardPage from './pages/DashboardPage'
 import AgentsPage from './pages/AgentsPage'
 import FaqPage from './pages/FaqPage'
 import ReportsPage from './pages/ReportsPage'
+import ConversationsPage from './pages/ConversationsPage'
 import { AppointmentsPage } from './pages/AppointmentsPage'
-import { PatientsPage, ConversationsPage, PlanPage } from './pages/OtherPages'
+import { PatientsPage, PlanPage } from './pages/OtherPages'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { agent, isLoading } = useAuth()
@@ -29,19 +30,15 @@ export default function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
-          <Route path="/" element={
-            <ProtectedRoute>
-              <AppLayout />
-            </ProtectedRoute>
-          }>
+          <Route path="/" element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
             <Route index element={<DashboardPage />} />
             <Route path="conversations" element={<ConversationsPage />} />
-            <Route path="appointments" element={<AppointmentsPage />} />
-            <Route path="patients" element={<PatientsPage />} />
-            <Route path="agents" element={<AgentsPage />} />
-            <Route path="faq" element={<FaqPage />} />
-            <Route path="reports" element={<ReportsPage />} />
-            <Route path="plan" element={<PlanPage />} />
+            <Route path="appointments"  element={<AppointmentsPage />} />
+            <Route path="patients"      element={<PatientsPage />} />
+            <Route path="agents"        element={<AgentsPage />} />
+            <Route path="faq"           element={<FaqPage />} />
+            <Route path="reports"       element={<ReportsPage />} />
+            <Route path="plan"          element={<PlanPage />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

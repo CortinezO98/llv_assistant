@@ -1,20 +1,20 @@
 from __future__ import annotations
-
 import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routes.agents import router as agents_router
-from app.api.routes.appointments import appointments_router, patients_router
-from app.api.routes.auth import router as auth_router
-from app.api.routes.dashboard import router as dashboard_router
-from app.api.routes.faq import router as faq_router
-from app.api.routes.health import router as health_router
-from app.api.routes.plan import router as plan_router
-from app.api.routes.reports import router as reports_router
-from app.api.routes.webhook import router as webhook_router
+from app.api.routes.agents        import router as agents_router
+from app.api.routes.appointments  import appointments_router, patients_router
+from app.api.routes.auth          import router as auth_router
+from app.api.routes.conversations import router as conversations_router
+from app.api.routes.dashboard     import router as dashboard_router
+from app.api.routes.faq           import router as faq_router
+from app.api.routes.health        import router as health_router
+from app.api.routes.plan          import router as plan_router
+from app.api.routes.reports       import router as reports_router
+from app.api.routes.webhook       import router as webhook_router
 from app.core.settings import settings
 
 logging.basicConfig(
@@ -49,7 +49,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Rutas
 app.include_router(health_router)
 app.include_router(webhook_router)
 app.include_router(auth_router)
@@ -60,3 +59,4 @@ app.include_router(faq_router)
 app.include_router(plan_router)
 app.include_router(dashboard_router)
 app.include_router(reports_router)
+app.include_router(conversations_router)
