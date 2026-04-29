@@ -1,103 +1,140 @@
 import { useEffect, useState } from 'react'
-import { dashboardApi, planApi } from '../api/client'
+import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
+import Icons from '../components/Icons'
+import { dashboardApi } from '../api/client'
+import { useAuth } from '../context/AuthContext'
 
 interface KpiData {
   conversations: { total: number; unique_users: number; completed: number; pct_completed: number; status_distribution: Record<string, number> }
   agents: { escalated: number; pct_escalated: number }
   appointments: { total_requested: number; confirmed: number; conversion_pct: number }
   sales: { verified_payments: number; total_revenue_usd: number }
+  events: { conversation_started: number; faq_resolved: number; agent_handoffs: number }
   plan_usage: { count: number; limit: number; percentage: number }
   period_days: number
 }
 
-function StatCard({ label, value, sub, color = 'brand', icon }: { label: string; value: string | number; sub?: string; color?: string; icon: string }) {
-  const colors: Record<string, string> = {
-    brand: 'bg-brand-50 text-brand-600',
-    blue:  'bg-blue-50 text-blue-600',
-    amber: 'bg-amber-50 text-amber-600',
-    rose:  'bg-rose-50 text-rose-600',
-    violet:'bg-violet-50 text-violet-600',
-    teal:  'bg-teal-50 text-teal-600',
-  }
+const STATUS_LABELS: Record<string, string> = {
+  active: 'Activas', in_agent: 'Con agente', completed: 'Completadas', closed: 'Cerradas'
+}
+const STATUS_COLORS: Record<string, string> = {
+  active: '#0b4c45', in_agent: '#3b82f6', completed: '#1D9E75', closed: '#7a6a55'
+}
+
+function KpiCard({ icon: Icon, label, value, sub, accent = false }: {
+  icon: any; label: string; value: string | number; sub?: string; accent?: boolean
+}) {
   return (
-    <div className="stat-card animate-fade-in">
+    <div className="bg-white rounded-2xl border border-[#e5ddd4] p-5 flex flex-col gap-3 hover:shadow-md transition-shadow duration-200">
       <div className="flex items-start justify-between">
-        <span className="text-xs font-semibold text-[#6b8a78] uppercase tracking-wider leading-tight">{label}</span>
-        <span className={`text-lg p-1.5 rounded-lg ${colors[color] || colors.brand}`}>{icon}</span>
+        <span className="text-xs font-semibold text-[#7a6a55] uppercase tracking-wider">{label}</span>
+        <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+          style={{ background: accent ? '#C6A96B' : '#0b4c4515', color: accent ? '#0b4c45' : '#0b4c45' }}>
+          <Icon size={15} strokeWidth={1.75} />
+        </div>
       </div>
       <div>
-        <div className="font-display text-3xl font-bold text-brand-800">{value}</div>
-        {sub && <div className="text-xs text-[#6b8a78] mt-0.5">{sub}</div>}
+        <div className="font-display text-3xl font-bold" style={{ color: '#0b4c45' }}>{value}</div>
+        {sub && <div className="text-xs text-[#7a6a55] mt-0.5">{sub}</div>}
       </div>
     </div>
   )
 }
 
-function PlanUsageBar({ count, limit, pct }: { count: number; limit: number; pct: number }) {
-  const color = pct >= 100 ? 'bg-red-500' : pct >= 80 ? 'bg-amber-500' : 'bg-brand-500'
+function HeroMetric({ count, limit, pct }: { count: number; limit: number; pct: number }) {
+  const barColor = pct >= 100 ? '#E24B4A' : pct >= 80 ? '#EF9F27' : '#1D9E75'
   return (
-    <div className="card p-5 animate-fade-in" style={{ animationDelay: '0.3s' }}>
-      <div className="flex items-center justify-between mb-3">
+    <div className="bg-white rounded-2xl border border-[#e5ddd4] p-6 col-span-2">
+      <div className="flex items-end justify-between mb-4">
         <div>
-          <div className="text-xs font-semibold text-[#6b8a78] uppercase tracking-wider">Uso del plan mensual</div>
-          <div className="font-display text-2xl font-bold text-brand-800 mt-0.5">{count} <span className="text-sm font-normal text-[#6b8a78]">/ {limit} conversaciones</span></div>
+          <p className="text-xs font-semibold text-[#7a6a55] uppercase tracking-wider mb-1">Plan mensual</p>
+          <div className="flex items-baseline gap-2">
+            <span className="font-display text-4xl font-bold" style={{ color: '#0b4c45' }}>{count}</span>
+            <span className="text-lg text-[#7a6a55]">/ {limit} conversaciones</span>
+          </div>
         </div>
-        <div className={`text-2xl font-display font-bold ${pct >= 80 ? 'text-amber-600' : 'text-brand-600'}`}>{pct}%</div>
+        <div className="font-display text-3xl font-bold" style={{ color: barColor }}>{pct}%</div>
       </div>
-      <div className="h-2.5 bg-brand-100 rounded-full overflow-hidden">
-        <div className={`h-full ${color} rounded-full transition-all duration-700`} style={{ width: `${Math.min(pct, 100)}%` }} />
+      <div className="h-2 rounded-full overflow-hidden" style={{ background: '#F5F1EB' }}>
+        <div className="h-full rounded-full transition-all duration-700" style={{ width: `${Math.min(pct, 100)}%`, background: barColor }} />
+      </div>
+      <div className="flex justify-between text-[10px] text-[#7a6a55] mt-1.5">
+        <span>0</span>
+        <span style={{ color: '#EF9F27' }}>⚠ 80% = {Math.round(limit * 0.8)}</span>
+        <span>{limit}</span>
       </div>
       {pct >= 80 && (
-        <div className="mt-3 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-          ⚠️ {pct >= 100 ? 'Límite alcanzado — contacta a tu proveedor para adquirir conversaciones adicionales.' : `Estás al ${pct}% del límite mensual.`}
+        <div className="mt-3 text-xs px-3 py-2 rounded-lg border"
+          style={{ background: '#FAEEDA', borderColor: '#EF9F27', color: '#633806' }}>
+          {pct >= 100
+            ? '🚨 Límite alcanzado — contacta a tu proveedor para adquirir conversaciones adicionales.'
+            : `⚠️ Estás al ${pct}% del límite mensual del plan Profesional.`}
         </div>
       )}
     </div>
   )
 }
 
+const CustomTooltip = ({ active, payload, label }: any) => {
+  if (!active || !payload?.length) return null
+  return (
+    <div className="bg-white border border-[#e5ddd4] rounded-xl px-3 py-2 shadow-sm text-xs">
+      <p className="font-semibold text-[#0b4c45] mb-1">{label}</p>
+      {payload.map((p: any) => (
+        <p key={p.name} style={{ color: p.color }}>{p.name}: {p.value}</p>
+      ))}
+    </div>
+  )
+}
+
 export default function DashboardPage() {
-  const [kpis, setKpis] = useState<KpiData | null>(null)
+  const { agent }  = useAuth()
+  const [kpis, setKpis]         = useState<KpiData | null>(null)
+  const [timeline, setTimeline] = useState<any[]>([])
   const [activity, setActivity] = useState<any[]>([])
-  const [loading, setLoading] = useState(true)
-  const [days, setDays] = useState(30)
+  const [loading, setLoading]   = useState(true)
+  const [days, setDays]         = useState(30)
 
   useEffect(() => {
     setLoading(true)
     Promise.all([
       dashboardApi.getKpis(days),
-      dashboardApi.getRecentActivity(10),
-    ]).then(([kpiRes, actRes]) => {
-      setKpis(kpiRes.data)
-      setActivity(actRes.data)
+      dashboardApi.getRecentActivity(8),
+      fetch(`/dashboard/analytics/timeline?days=${days}`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('llv_token')}` }
+      }).then(r => r.json()).catch(() => []),
+    ]).then(([k, a, t]) => {
+      setKpis(k.data)
+      setActivity(a.data)
+      setTimeline(Array.isArray(t) ? t.slice(-14) : [])
     }).finally(() => setLoading(false))
   }, [days])
 
-  const statusLabels: Record<string, string> = {
-    active: 'Activa', in_agent: 'Con agente', completed: 'Completada', closed: 'Cerrada'
-  }
-  const statusColors: Record<string, string> = {
-    active: 'bg-brand-100 text-brand-700',
-    in_agent: 'bg-blue-100 text-blue-700',
-    completed: 'bg-teal-100 text-teal-700',
-    closed: 'bg-gray-100 text-gray-600',
-  }
+  const now  = new Date()
+  const hour = now.getHours()
+  const greeting = hour < 12 ? 'Buenos días' : hour < 18 ? 'Buenas tardes' : 'Buenas noches'
+
+  const statusDist = kpis?.conversations.status_distribution || {}
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-start justify-between mb-7">
         <div>
-          <h1 className="font-display text-2xl font-bold text-brand-800">Dashboard</h1>
-          <p className="text-sm text-[#6b8a78] mt-0.5">Resumen de operaciones LLV Assistant</p>
+          <p className="text-xs font-semibold text-[#7a6a55] uppercase tracking-wider mb-0.5">
+            {now.toLocaleDateString('es', { weekday: 'long', day: 'numeric', month: 'long' })}
+          </p>
+          <h1 className="font-display text-2xl font-bold text-[#0b4c45]">
+            {greeting}, {agent?.name?.split(' ')[0]} 👋
+          </h1>
         </div>
-        <div className="flex items-center gap-2">
-          {[7, 30, 90].map((d) => (
-            <button
-              key={d}
-              onClick={() => setDays(d)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${days === d ? 'bg-brand-600 text-white' : 'bg-white border border-[#e4ede8] text-[#6b8a78] hover:border-brand-400'}`}
-            >
+        <div className="flex gap-1.5">
+          {[7, 30, 90].map(d => (
+            <button key={d} onClick={() => setDays(d)}
+              className="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
+              style={days === d
+                ? { background: '#0b4c45', color: 'white' }
+                : { background: 'white', border: '1px solid #e5ddd4', color: '#7a6a55' }}>
               {d}d
             </button>
           ))}
@@ -106,88 +143,115 @@ export default function DashboardPage() {
 
       {loading ? (
         <div className="flex items-center justify-center h-64">
-          <div className="flex flex-col items-center gap-3">
-            <svg className="animate-spin w-8 h-8 text-brand-500" viewBox="0 0 24 24" fill="none">
-              <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeOpacity=".2"/>
-              <path d="M12 2a10 10 0 0 1 10 10" stroke="currentColor" strokeWidth="3" strokeLinecap="round"/>
-            </svg>
-            <span className="text-sm text-[#6b8a78]">Cargando métricas...</span>
-          </div>
+          <svg className="animate-spin w-8 h-8" style={{ color: '#0b4c45' }} viewBox="0 0 24 24" fill="none">
+            <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeOpacity=".2"/>
+            <path d="M12 2a10 10 0 0 1 10 10" stroke="currentColor" strokeWidth="3" strokeLinecap="round"/>
+          </svg>
         </div>
       ) : kpis ? (
-        <div className="space-y-6">
-          {/* KPI Grid */}
+        <div className="space-y-5">
+          {/* KPI grid */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 stagger">
-            <StatCard icon="💬" label="Conversaciones" value={kpis.conversations.total} sub={`${kpis.conversations.unique_users} usuarios únicos`} color="brand" />
-            <StatCard icon="✅" label="Completadas" value={`${kpis.conversations.pct_completed}%`} sub={`${kpis.conversations.completed} de ${kpis.conversations.total}`} color="teal" />
-            <StatCard icon="🎧" label="Escaladas a agente" value={kpis.agents.escalated} sub={`${kpis.agents.pct_escalated}% del total`} color="blue" />
-            <StatCard icon="📅" label="Citas confirmadas" value={kpis.appointments.confirmed} sub={`${kpis.appointments.conversion_pct}% conversión`} color="violet" />
-            <StatCard icon="💰" label="Ventas verificadas" value={kpis.sales.verified_payments} sub="pagos confirmados" color="amber" />
-            <StatCard icon="💵" label="Ingresos canal" value={`$${kpis.sales.total_revenue_usd.toFixed(2)}`} sub="USD verificados" color="brand" />
-            <StatCard icon="📱" label="Canal WhatsApp" value="100%" sub="único canal activo" color="teal" />
-            <StatCard icon="⭐" label="Satisfacción" value="—" sub="Encuesta pendiente" color="amber" />
+            <KpiCard icon={MessageSquare} label="Conversaciones"    value={kpis.conversations.total}          sub={`${kpis.conversations.unique_users} usuarios únicos`} accent />
+            <KpiCard icon={TrendingUp}    label="Completadas"       value={`${kpis.conversations.pct_completed}%`} sub={`${kpis.conversations.completed} sesiones`} />
+            <KpiCard icon={Headphones}   label="Escaladas a agente" value={kpis.agents.escalated}              sub={`${kpis.agents.pct_escalated}% del total`} />
+            <KpiCard icon={CalendarCheck} label="Citas confirmadas" value={kpis.appointments.confirmed}        sub={`${kpis.appointments.conversion_pct}% conversión`} />
+            <KpiCard icon={CreditCard}   label="Pagos verificados"  value={kpis.sales.verified_payments}       sub="pagos confirmados" />
+            <KpiCard icon={DollarSign}   label="Ingresos canal"     value={`$${kpis.sales.total_revenue_usd.toFixed(2)}`} sub="USD verificados" />
+            <KpiCard icon={Users}        label="FAQ resueltas"       value={kpis.events?.faq_resolved || 0}     sub="sin escalar a agente" />
+            <KpiCard icon={Star}         label="Satisfacción"       value="—"                                  sub="Encuesta pendiente" />
           </div>
 
-          {/* Plan usage */}
-          <PlanUsageBar count={kpis.plan_usage.count} limit={kpis.plan_usage.limit} pct={kpis.plan_usage.percentage} />
+          {/* Plan + Distribución */}
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+            <HeroMetric count={kpis.plan_usage.count} limit={kpis.plan_usage.limit} pct={kpis.plan_usage.percentage} />
 
-          {/* Bottom grid */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {/* Estado de conversaciones */}
-            <div className="card p-5 animate-fade-in" style={{ animationDelay: '0.35s' }}>
-              <h3 className="font-semibold text-brand-800 mb-4 flex items-center gap-2">
-                <span>📊</span> Distribución de estados
-              </h3>
-              <div className="space-y-2.5">
-                {Object.entries(kpis.conversations.status_distribution).map(([status, count]) => (
-                  <div key={status} className="flex items-center justify-between">
-                    <span className={`badge ${statusColors[status] || 'bg-gray-100 text-gray-600'}`}>
-                      {statusLabels[status] || status}
-                    </span>
-                    <div className="flex items-center gap-3">
-                      <div className="w-24 h-1.5 bg-brand-100 rounded-full overflow-hidden">
-                        <div className="h-full bg-brand-500 rounded-full" style={{ width: `${kpis.conversations.total ? (count / kpis.conversations.total) * 100 : 0}%` }} />
+            {/* Distribución de estados */}
+            <div className="bg-white rounded-2xl border border-[#e5ddd4] p-5 lg:col-span-2">
+              <p className="text-xs font-semibold text-[#7a6a55] uppercase tracking-wider mb-4">Distribución de estados</p>
+              <div className="space-y-3">
+                {Object.entries(statusDist).length === 0 ? (
+                  <p className="text-sm text-[#7a6a55] text-center py-4">Sin conversaciones aún</p>
+                ) : Object.entries(statusDist).map(([status, count]) => {
+                  const total = kpis.conversations.total || 1
+                  const pct   = Math.round((count / total) * 100)
+                  return (
+                    <div key={status} className="flex items-center gap-3">
+                      <span className="text-xs text-[#7a6a55] w-24 flex-shrink-0">{STATUS_LABELS[status] || status}</span>
+                      <div className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ background: '#F5F1EB' }}>
+                        <div className="h-full rounded-full transition-all duration-500"
+                          style={{ width: `${pct}%`, background: STATUS_COLORS[status] || '#7a6a55' }} />
                       </div>
-                      <span className="text-sm font-semibold text-brand-800 w-6 text-right">{count}</span>
+                      <span className="text-xs font-semibold text-[#0b4c45] w-6 text-right">{count}</span>
                     </div>
-                  </div>
-                ))}
-                {Object.keys(kpis.conversations.status_distribution).length === 0 && (
-                  <p className="text-sm text-[#6b8a78] text-center py-4">Sin conversaciones en este período</p>
-                )}
+                  )
+                })}
               </div>
+            </div>
+          </div>
+
+          {/* Gráfica de tendencia + Actividad reciente */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            {/* Gráfica de área */}
+            <div className="bg-white rounded-2xl border border-[#e5ddd4] p-5 lg:col-span-2">
+              <p className="text-xs font-semibold text-[#7a6a55] uppercase tracking-wider mb-4">Tendencia — últimos {days} días</p>
+              {timeline.length > 1 ? (
+                <ResponsiveContainer width="100%" height={180}>
+                  <AreaChart data={timeline} margin={{ top: 4, right: 4, bottom: 0, left: -20 }}>
+                    <defs>
+                      <linearGradient id="grad1" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#0b4c45" stopOpacity={0.15}/>
+                        <stop offset="95%" stopColor="#0b4c45" stopOpacity={0}/>
+                      </linearGradient>
+                      <linearGradient id="grad2" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#C6A96B" stopOpacity={0.15}/>
+                        <stop offset="95%" stopColor="#C6A96B" stopOpacity={0}/>
+                      </linearGradient>
+                    </defs>
+                    <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#7a6a55' }} tickLine={false} axisLine={false} />
+                    <YAxis tick={{ fontSize: 10, fill: '#7a6a55' }} tickLine={false} axisLine={false} />
+                    <Tooltip content={<CustomTooltip />} />
+                    <Area type="monotone" dataKey="conversation_started" name="Conv." stroke="#0b4c45" strokeWidth={2} fill="url(#grad1)" dot={false} />
+                    <Area type="monotone" dataKey="agent_handoff" name="Escaladas" stroke="#C6A96B" strokeWidth={2} fill="url(#grad2)" dot={false} />
+                  </AreaChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex flex-col items-center justify-center h-40 text-center">
+                  <Icons.TrendingUp />
+                  <p className="text-sm text-[#7a6a55]">Sin datos suficientes para la gráfica</p>
+                  <p className="text-xs text-[#7a6a55]/60 mt-0.5">Aparecerá después de las primeras conversaciones</p>
+                </div>
+              )}
             </div>
 
             {/* Actividad reciente */}
-            <div className="card p-5 animate-fade-in" style={{ animationDelay: '0.4s' }}>
-              <h3 className="font-semibold text-brand-800 mb-4 flex items-center gap-2">
-                <span>🕐</span> Actividad reciente
-              </h3>
+            <div className="bg-white rounded-2xl border border-[#e5ddd4] p-5">
+              <p className="text-xs font-semibold text-[#7a6a55] uppercase tracking-wider mb-4">Actividad reciente</p>
               <div className="space-y-2">
                 {activity.length === 0 ? (
-                  <p className="text-sm text-[#6b8a78] text-center py-4">Sin actividad reciente</p>
-                ) : activity.slice(0, 6).map((s: any) => (
-                  <div key={s.session_id} className="flex items-center justify-between py-2 border-b border-[#e4ede8] last:border-0">
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <div className="w-7 h-7 bg-brand-100 rounded-full flex items-center justify-center text-brand-600 text-xs font-bold flex-shrink-0">
+                  <p className="text-sm text-[#7a6a55] text-center py-4">Sin actividad</p>
+                ) : activity.map((s: any) => {
+                  const statusColor = STATUS_COLORS[s.status] || '#7a6a55'
+                  return (
+                    <div key={s.session_id} className="flex items-center gap-2.5 py-2 border-b border-[#e5ddd4] last:border-0">
+                      <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
+                        style={{ background: '#F5F1EB', color: '#0b4c45' }}>
                         {(s.patient_name || '?').charAt(0)}
                       </div>
-                      <div className="min-w-0">
-                        <div className="text-xs font-semibold text-brand-800 truncate">{s.patient_name || 'Desconocido'}</div>
-                        <div className="text-[10px] text-[#6b8a78] font-mono">{s.whatsapp_number}</div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-semibold text-[#0b4c45] truncate">{s.patient_name || 'Desconocido'}</p>
+                        <p className="text-[10px] text-[#7a6a55] font-mono">{s.whatsapp_number}</p>
                       </div>
+                      <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: statusColor }} />
                     </div>
-                    <span className={`badge text-[10px] ${statusColors[s.status] || 'bg-gray-100 text-gray-600'}`}>
-                      {statusLabels[s.status] || s.status}
-                    </span>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             </div>
           </div>
         </div>
       ) : (
-        <div className="text-center py-16 text-[#6b8a78]">Error cargando datos. Verifica la conexión al backend.</div>
+        <div className="text-center py-16 text-[#7a6a55]">Error cargando datos. Verifica la conexión al backend.</div>
       )}
     </div>
   )

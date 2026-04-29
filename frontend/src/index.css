@@ -14,19 +14,16 @@
     --text:       #1a1208;
     --text-muted: #7a6a55;
   }
-
   * { box-sizing: border-box; }
-
   body {
     background: var(--bg);
     color: var(--text);
     font-family: 'DM Sans', sans-serif;
     -webkit-font-smoothing: antialiased;
   }
-
   ::-webkit-scrollbar { width: 5px; height: 5px; }
   ::-webkit-scrollbar-track { background: transparent; }
-  ::-webkit-scrollbar-thumb { background: #C6A96B55; border-radius: 3px; }
+  ::-webkit-scrollbar-thumb { background: #C6A96B44; border-radius: 3px; }
   ::-webkit-scrollbar-thumb:hover { background: #C6A96B; }
 }
 
@@ -34,43 +31,29 @@
   .card {
     @apply bg-white rounded-2xl border border-[#e5ddd4] shadow-sm;
   }
-
   .btn-primary {
-    @apply bg-[#0b4c45] hover:bg-[#0d5c54] text-white font-medium px-4 py-2 rounded-xl transition-all duration-200 text-sm flex items-center gap-2 disabled:opacity-50;
+    @apply bg-[#0b4c45] hover:bg-[#0d5c54] text-white font-medium px-4 py-2 rounded-xl
+           transition-all duration-200 text-sm flex items-center gap-2 disabled:opacity-50;
   }
-
   .btn-gold {
-    @apply bg-[#C6A96B] hover:bg-[#b8943a] text-white font-medium px-4 py-2 rounded-xl transition-all duration-200 text-sm flex items-center gap-2 disabled:opacity-50;
+    @apply bg-[#C6A96B] hover:bg-[#b8943a] text-white font-medium px-4 py-2 rounded-xl
+           transition-all duration-200 text-sm flex items-center gap-2;
   }
-
   .btn-ghost {
-    @apply hover:bg-[#F5F1EB] text-[#0b4c45] font-medium px-4 py-2 rounded-xl transition-all duration-200 text-sm flex items-center gap-2;
+    @apply hover:bg-[#F5F1EB] text-[#0b4c45] font-medium px-4 py-2 rounded-xl
+           transition-all duration-200 text-sm flex items-center gap-2;
   }
-
   .badge {
     @apply inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium;
   }
-
   .input {
-    @apply w-full border border-[#e5ddd4] rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#C6A96B]/30 focus:border-[#C6A96B] bg-white placeholder:text-[#7a6a55] transition-all;
+    @apply w-full border border-[#e5ddd4] rounded-xl px-3 py-2.5 text-sm
+           focus:outline-none focus:ring-2 focus:ring-[#C6A96B]/30 focus:border-[#C6A96B]
+           bg-white placeholder:text-[#7a6a55] transition-all;
   }
-
   .stat-card {
     @apply card p-5 flex flex-col gap-3;
   }
-
-  .nav-item {
-    @apply flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 cursor-pointer;
-  }
-
-  .nav-item.active {
-    @apply bg-[#0b4c45] text-white shadow-sm;
-  }
-
-  .nav-item:not(.active) {
-    @apply text-[#7a6a55] hover:bg-[#F5F1EB] hover:text-[#0b4c45];
-  }
-
   .table-row {
     @apply border-b border-[#e5ddd4] last:border-0 hover:bg-[#F5F1EB]/50 transition-colors;
   }
@@ -81,7 +64,7 @@
   to   { opacity: 1; transform: translateY(0); }
 }
 @keyframes slideIn {
-  from { opacity: 0; transform: translateX(-12px); }
+  from { opacity: 0; transform: translateX(12px); }
   to   { opacity: 1; transform: translateX(0); }
 }
 @keyframes pulse-dot {
@@ -100,3 +83,6 @@
 .stagger > *:nth-child(4) { animation-delay: 0.20s; }
 .stagger > *:nth-child(5) { animation-delay: 0.25s; }
 .stagger > *:nth-child(6) { animation-delay: 0.30s; }
+.stagger > *:nth-child(7) { animation-delay: 0.35s; }
+.stagger > *:nth-child(8) { animation-delay: 0.40s; }
+.stagger > *:nth-child(9) { animation-delay: 0.45s; }

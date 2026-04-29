@@ -1,25 +1,21 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
+import Icons from '../components/Icons'
 import { useAuth } from '../context/AuthContext'
 
 const NAV_ITEMS = [
-  { to: '/',              label: 'Dashboard',       icon: '◈',  roles: ['admin', 'supervisor'] },
-  { to: '/conversations', label: 'Conversaciones',  icon: '💬', roles: ['admin', 'supervisor', 'agent'] },
-  { to: '/appointments',  label: 'Citas',           icon: '📅', roles: ['admin', 'supervisor', 'agent'] },
-  { to: '/deliveries',    label: 'Entregas/Envíos', icon: '📦', roles: ['admin', 'supervisor', 'agent'] },
-  { to: '/patients',      label: 'Pacientes',       icon: '👤', roles: ['admin', 'supervisor', 'agent'] },
-  { to: '/agents',        label: 'Agentes',         icon: '🎧', roles: ['admin', 'supervisor'] },
-  { to: '/faq',           label: 'Base FAQ',        icon: '📚', roles: ['admin', 'supervisor'] },
-  { to: '/reports',       label: 'Reportería',      icon: '📊', roles: ['admin', 'supervisor'] },
-  { to: '/plan',          label: 'Plan / Uso',      icon: '⚡', roles: ['admin'] },
+  { to: '/',              label: 'Dashboard',       Icon: Icons.Dashboard, roles: ['admin', 'supervisor'] },
+  { to: '/conversations', label: 'Conversaciones',  Icon: Icons.Chat,   roles: ['admin', 'supervisor', 'agent'] },
+  { to: '/appointments',  label: 'Citas',           Icon: Icons.Calendar,    roles: ['admin', 'supervisor', 'agent'] },
+  { to: '/deliveries',    label: 'Entregas/Envíos', Icon: Icons.Package,         roles: ['admin', 'supervisor', 'agent'] },
+  { to: '/patients',      label: 'Pacientes',       Icon: Icons.Users,           roles: ['admin', 'supervisor', 'agent'] },
+  { to: '/agents',        label: 'Agentes',         Icon: Icons.Headphones,      roles: ['admin', 'supervisor'] },
+  { to: '/faq',           label: 'Base FAQ',        Icon: Icons.Book,        roles: ['admin', 'supervisor'] },
+  { to: '/reports',       label: 'Reportería',      Icon: Icons.BarChart,       roles: ['admin', 'supervisor'] },
+  { to: '/plan',          label: 'Plan / Uso',      Icon: Icons.Zap,             roles: ['admin'] },
 ]
 
 const ROLE_LABELS: Record<string, string> = {
   admin: 'Administrador', supervisor: 'Supervisor', agent: 'Agente',
-}
-const ROLE_COLORS: Record<string, string> = {
-  admin:      'bg-[#C6A96B]/20 text-[#8a6d3a]',
-  supervisor: 'bg-blue-100 text-blue-700',
-  agent:      'bg-[#0b4c45]/10 text-[#0b4c45]',
 }
 
 export default function AppLayout() {
@@ -29,63 +25,73 @@ export default function AppLayout() {
   const visibleItems = NAV_ITEMS.filter(item => item.roles.includes(role))
 
   return (
-    <div className="flex h-screen overflow-hidden bg-[#f8f6f2]">
-      <aside className="w-60 flex-shrink-0 bg-white border-r border-[#e5ddd4] flex flex-col">
+    <div className="flex h-screen overflow-hidden" style={{ background: '#f8f6f2' }}>
+      {/* ── Sidebar ────────────────────────────────────────────────────────── */}
+      <aside className="w-56 flex-shrink-0 flex flex-col" style={{ background: '#0b4c45' }}>
 
-        {/* Logo LLV */}
-        <div className="px-5 py-5 border-b border-[#e5ddd4]">
+        {/* Logo */}
+        <div className="px-5 py-5 border-b border-white/10">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 bg-[#0b4c45] rounded-xl flex items-center justify-center flex-shrink-0">
-              <span className="text-[#C6A96B] font-display font-bold text-sm">LLV</span>
-            </div>
+            <img
+              src={LOGO_MONO_WHITE}
+              alt="LLV"
+              className="h-7 object-contain"
+              style={{ filter: 'brightness(0) invert(1) drop-shadow(0 1px 4px rgba(198,169,107,0.4))' }}
+            />
             <div>
-              <div className="font-display font-bold text-sm text-[#0b4c45] leading-tight">LLV Assistant</div>
-              <div className="text-[10px] text-[#7a6a55] font-medium">Wellness Clinic</div>
+              <div className="font-display font-bold text-white text-sm leading-tight">LLV Assistant</div>
+              <div className="text-[10px] text-white/40">Wellness Clinic</div>
             </div>
           </div>
         </div>
 
-        {/* Rol badge */}
-        <div className="px-4 py-2.5 border-b border-[#e5ddd4]">
-          <span className={`badge text-[10px] ${ROLE_COLORS[role]}`}>{ROLE_LABELS[role] || role}</span>
-          {role === 'agent' && (
-            <p className="text-[9px] text-[#7a6a55] mt-1">Solo ves tus conversaciones</p>
-          )}
+        {/* Rol */}
+        <div className="px-4 py-2.5 border-b border-white/10">
+          <span className="text-[10px] font-semibold tracking-wider uppercase px-2 py-1 rounded-md"
+            style={{ background: 'rgba(198,169,107,0.15)', color: '#C6A96B' }}>
+            {ROLE_LABELS[role] || role}
+          </span>
         </div>
 
         {/* Nav */}
         <nav className="flex-1 px-3 py-3 space-y-0.5 overflow-y-auto">
-          {visibleItems.map(item => (
-            <NavLink key={item.to} to={item.to} end={item.to === '/'}
-              className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
-              <span className="text-base leading-none">{item.icon}</span>
-              <span>{item.label}</span>
+          {visibleItems.map(({ to, label, Icon }) => (
+            <NavLink key={to} to={to} end={to === '/'}
+              className={({ isActive }) =>
+                `flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 cursor-pointer ${
+                  isActive
+                    ? 'text-[#0b4c45] shadow-sm'
+                    : 'text-white/60 hover:text-white hover:bg-white/10'
+                }`
+              }
+              style={({ isActive }) => isActive ? { background: '#C6A96B' } : {}}
+            >
+              <Icon size={16} strokeWidth={1.75} className="flex-shrink-0" />
+              <span>{label}</span>
             </NavLink>
           ))}
         </nav>
 
-        {/* Perfil */}
-        <div className="px-3 py-4 border-t border-[#e5ddd4]">
-          <div className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-[#F5F1EB]">
-            <div className="w-8 h-8 bg-[#0b4c45] rounded-full flex items-center justify-center text-[#C6A96B] text-xs font-bold flex-shrink-0">
+        {/* Perfil del agente */}
+        <div className="px-3 py-4 border-t border-white/10">
+          <div className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl" style={{ background: 'rgba(255,255,255,0.07)' }}>
+            <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
+              style={{ background: '#C6A96B', color: '#0b4c45' }}>
               {agent?.name?.charAt(0) || 'A'}
             </div>
             <div className="flex-1 min-w-0">
-              <div className="text-xs font-semibold text-[#0b4c45] truncate">{agent?.name}</div>
-              <div className="text-[10px] text-[#7a6a55]">{ROLE_LABELS[role]}</div>
+              <div className="text-xs font-semibold text-white truncate">{agent?.name}</div>
+              <div className="text-[10px] text-white/40">{ROLE_LABELS[role]}</div>
             </div>
             <button onClick={() => { logout(); navigate('/login') }}
-              className="text-[#7a6a55] hover:text-red-500 transition-colors p-1" title="Cerrar sesión">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
-                <polyline points="16,17 21,12 16,7"/>
-                <line x1="21" y1="12" x2="9" y2="12"/>
-              </svg>
+              className="text-white/40 hover:text-white transition-colors p-1 flex-shrink-0" title="Cerrar sesión">
+              <Icons.LogOut />
             </button>
           </div>
         </div>
       </aside>
 
+      {/* ── Contenido principal ─────────────────────────────────────────────── */}
       <main className="flex-1 overflow-y-auto">
         <Outlet />
       </main>
