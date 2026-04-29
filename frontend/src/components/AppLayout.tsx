@@ -2,13 +2,14 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 
 const navItems = [
-  { to: '/',             label: 'Dashboard',   icon: '◈' },
-  { to: '/conversations',label: 'Conversaciones', icon: '💬' },
-  { to: '/appointments', label: 'Citas',        icon: '📅' },
-  { to: '/patients',     label: 'Pacientes',    icon: '👤' },
-  { to: '/agents',       label: 'Agentes',      icon: '🎧' },
-  { to: '/faq',          label: 'Base FAQ',     icon: '📚' },
-  { to: '/plan',         label: 'Plan / Uso',   icon: '📊' },
+  { to: '/',              label: 'Dashboard',      icon: '◈' },
+  { to: '/conversations', label: 'Conversaciones', icon: '💬' },
+  { to: '/appointments',  label: 'Citas',          icon: '📅' },
+  { to: '/patients',      label: 'Pacientes',      icon: '👤' },
+  { to: '/agents',        label: 'Agentes',        icon: '🎧' },
+  { to: '/faq',           label: 'Base FAQ',       icon: '📚' },
+  { to: '/reports',       label: 'Reportería',     icon: '📊' },
+  { to: '/plan',          label: 'Plan / Uso',     icon: '⚡' },
 ]
 
 export default function AppLayout() {
@@ -64,11 +65,7 @@ export default function AppLayout() {
               <div className="text-xs font-semibold text-brand-800 truncate">{agent?.name}</div>
               <div className="text-[10px] text-[#6b8a78] capitalize">{agent?.role}</div>
             </div>
-            <button
-              onClick={handleLogout}
-              className="text-[#6b8a78] hover:text-red-500 transition-colors p-1"
-              title="Cerrar sesión"
-            >
+            <button onClick={handleLogout} className="text-[#6b8a78] hover:text-red-500 transition-colors p-1" title="Cerrar sesión">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
                 <polyline points="16,17 21,12 16,7"/>

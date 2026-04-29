@@ -5,6 +5,7 @@ import LoginPage from './pages/LoginPage'
 import DashboardPage from './pages/DashboardPage'
 import AgentsPage from './pages/AgentsPage'
 import FaqPage from './pages/FaqPage'
+import ReportsPage from './pages/ReportsPage'
 import { AppointmentsPage } from './pages/AppointmentsPage'
 import { PatientsPage, ConversationsPage, PlanPage } from './pages/OtherPages'
 
@@ -39,6 +40,7 @@ export default function App() {
             <Route path="patients" element={<PatientsPage />} />
             <Route path="agents" element={<AgentsPage />} />
             <Route path="faq" element={<FaqPage />} />
+            <Route path="reports" element={<ReportsPage />} />
             <Route path="plan" element={<PlanPage />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />

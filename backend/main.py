@@ -13,6 +13,7 @@ from app.api.routes.dashboard import router as dashboard_router
 from app.api.routes.faq import router as faq_router
 from app.api.routes.health import router as health_router
 from app.api.routes.plan import router as plan_router
+from app.api.routes.reports import router as reports_router
 from app.api.routes.webhook import router as webhook_router
 from app.core.settings import settings
 
@@ -58,3 +59,4 @@ app.include_router(appointments_router)
 app.include_router(faq_router)
 app.include_router(plan_router)
 app.include_router(dashboard_router)
+app.include_router(reports_router)
