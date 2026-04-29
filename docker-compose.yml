@@ -6,12 +6,12 @@ services:
     container_name: llv_db
     restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-rootpassword}
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-llv_root_2024}
       MYSQL_DATABASE: ${DB_NAME:-llv_assistant}
       MYSQL_USER: ${DB_USER:-llv_user}
       MYSQL_PASSWORD: ${DB_PASSWORD:-llv_password}
     ports:
-      - "3306:3306"
+      - "3308:3306"
     volumes:
       - llv_mysql_data:/var/lib/mysql
     healthcheck:
@@ -29,7 +29,7 @@ services:
     env_file:
       - ./backend/.env
     ports:
-      - "8000:8000"
+      - "8001:8000"
     depends_on:
       db:
         condition: service_healthy
@@ -44,12 +44,12 @@ services:
     container_name: llv_frontend
     restart: unless-stopped
     ports:
-      - "5173:5173"
+      - "5174:5173"
     volumes:
       - ./frontend:/app
       - /app/node_modules
     environment:
-      - VITE_API_URL=http://localhost:8000
+      - VITE_API_URL=http://localhost:8001
 
 volumes:
   llv_mysql_data:

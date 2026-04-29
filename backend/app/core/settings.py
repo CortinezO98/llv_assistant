@@ -1,5 +1,11 @@
-from pydantic_settings import BaseSettings
+from __future__ import annotations
+
+import json
 from functools import lru_cache
+from typing import Any
+
+from pydantic import field_validator
+from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
@@ -10,12 +16,24 @@ class Settings(BaseSettings):
     secret_key: str = "dev-secret-key-change-in-production"
     allowed_origins: list[str] = ["http://localhost:5173", "http://localhost:3000"]
 
+    @field_validator("allowed_origins", mode="before")
+    @classmethod
+    def parse_origins(cls, v: Any) -> list[str]:
+        if isinstance(v, list):
+            return v
+        if isinstance(v, str):
+            v = v.strip()
+            if v.startswith("["):
+                return json.loads(v)
+            return [o.strip() for o in v.split(",") if o.strip()]
+        return v
+
     # Base de datos
-    db_host: str = "db"
-    db_port: int = 3306
+    db_host: str = "127.0.0.1"
+    db_port: int = 3307
     db_name: str = "llv_assistant"
-    db_user: str = "llv_user"
-    db_password: str = "llv_password"
+    db_user: str = "root"
+    db_password: str = ""
 
     @property
     def database_url(self) -> str:
@@ -27,7 +45,7 @@ class Settings(BaseSettings):
 
     # Gemini AI
     gemini_api_key: str = ""
-    gemini_model: str = "gemini-1.5-flash"
+    gemini_model: str = "gemini-2.5-flash-preview-04-17"
 
     # WhatsApp
     whatsapp_token: str = ""
