@@ -1,0 +1,50 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Entorno virtual
+venv/
+.venv/
+env/
+
+# Variables de entorno — NUNCA subir al repo
+backend/.env
+.env
+*.env
+
+# Base de datos local
+*.db
+*.sqlite3
+
+# Node / Frontend
+node_modules/
+frontend/dist/
+frontend/.env
+frontend/.env.local
+
+# Docker
+*.log
+docker-compose.override.yml
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Tests
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Uploads / media locales
+uploads/
+media/
