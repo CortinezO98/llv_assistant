@@ -16,4 +16,5 @@ __all__ = [
     "PlanUsage",
     "OutboxMessage",
     "InboxMessage",
+    "AnalyticsEvent"
 ]
