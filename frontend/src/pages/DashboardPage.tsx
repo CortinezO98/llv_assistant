@@ -21,16 +21,16 @@ const STATUS_COLORS: Record<string, string> = {
   active: '#0b4c45', in_agent: '#3b82f6', completed: '#1D9E75', closed: '#7a6a55'
 }
 
-function KpiCard({ icon: Icon, label, value, sub, accent = false }: {
-  icon: any; label: string; value: string | number; sub?: string; accent?: boolean
+function KpiCard({ Icon, label, value, sub, accent = false }: {
+  Icon: React.FC; label: string; value: string | number; sub?: string; accent?: boolean
 }) {
   return (
     <div className="bg-white rounded-2xl border border-[#e5ddd4] p-5 flex flex-col gap-3 hover:shadow-md transition-shadow duration-200">
       <div className="flex items-start justify-between">
         <span className="text-xs font-semibold text-[#7a6a55] uppercase tracking-wider">{label}</span>
         <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
-          style={{ background: accent ? '#C6A96B' : '#0b4c4515', color: accent ? '#0b4c45' : '#0b4c45' }}>
-          <Icon size={15} strokeWidth={1.75} />
+          style={{ background: accent ? '#C6A96B' : '#0b4c4515', color: '#0b4c45' }}>
+          <Icon />
         </div>
       </div>
       <div>
@@ -56,7 +56,8 @@ function HeroMetric({ count, limit, pct }: { count: number; limit: number; pct: 
         <div className="font-display text-3xl font-bold" style={{ color: barColor }}>{pct}%</div>
       </div>
       <div className="h-2 rounded-full overflow-hidden" style={{ background: '#F5F1EB' }}>
-        <div className="h-full rounded-full transition-all duration-700" style={{ width: `${Math.min(pct, 100)}%`, background: barColor }} />
+        <div className="h-full rounded-full transition-all duration-700"
+          style={{ width: `${Math.min(pct, 100)}%`, background: barColor }} />
       </div>
       <div className="flex justify-between text-[10px] text-[#7a6a55] mt-1.5">
         <span>0</span>
@@ -88,7 +89,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 }
 
 export default function DashboardPage() {
-  const { agent }  = useAuth()
+  const { agent } = useAuth()
   const [kpis, setKpis]         = useState<KpiData | null>(null)
   const [timeline, setTimeline] = useState<any[]>([])
   const [activity, setActivity] = useState<any[]>([])
@@ -97,12 +98,13 @@ export default function DashboardPage() {
 
   useEffect(() => {
     setLoading(true)
+    const token = localStorage.getItem('llv_token')
+    const headers = { Authorization: `Bearer ${token}` }
     Promise.all([
       dashboardApi.getKpis(days),
       dashboardApi.getRecentActivity(8),
-      fetch(`/dashboard/analytics/timeline?days=${days}`, {
-        headers: { Authorization: `Bearer ${localStorage.getItem('llv_token')}` }
-      }).then(r => r.json()).catch(() => []),
+      fetch(`http://localhost:8001/dashboard/analytics/timeline?days=${days}`, { headers })
+        .then(r => r.json()).catch(() => []),
     ]).then(([k, a, t]) => {
       setKpis(k.data)
       setActivity(a.data)
@@ -113,8 +115,18 @@ export default function DashboardPage() {
   const now  = new Date()
   const hour = now.getHours()
   const greeting = hour < 12 ? 'Buenos días' : hour < 18 ? 'Buenas tardes' : 'Buenas noches'
-
   const statusDist = kpis?.conversations.status_distribution || {}
+
+  const KPI_CARDS = [
+    { Icon: Icons.Chat,          label: 'Conversaciones',      value: kpis?.conversations.total ?? 0,                    sub: `${kpis?.conversations.unique_users ?? 0} usuarios únicos`, accent: true },
+    { Icon: Icons.TrendingUp,    label: 'Completadas',         value: `${kpis?.conversations.pct_completed ?? 0}%`,       sub: `${kpis?.conversations.completed ?? 0} sesiones` },
+    { Icon: Icons.Headphones,    label: 'Escaladas a agente',  value: kpis?.agents.escalated ?? 0,                       sub: `${kpis?.agents.pct_escalated ?? 0}% del total` },
+    { Icon: Icons.CalendarCheck, label: 'Citas confirmadas',   value: kpis?.appointments.confirmed ?? 0,                  sub: `${kpis?.appointments.conversion_pct ?? 0}% conversión` },
+    { Icon: Icons.CreditCard,    label: 'Pagos verificados',   value: kpis?.sales.verified_payments ?? 0,                 sub: 'pagos confirmados' },
+    { Icon: Icons.DollarSign,    label: 'Ingresos canal',      value: `$${(kpis?.sales.total_revenue_usd ?? 0).toFixed(2)}`, sub: 'USD verificados' },
+    { Icon: Icons.Book,          label: 'FAQ resueltas',       value: kpis?.events?.faq_resolved ?? 0,                   sub: 'sin escalar a agente' },
+    { Icon: Icons.Star,          label: 'Satisfacción',        value: '—',                                               sub: 'Encuesta pendiente' },
+  ]
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
@@ -152,25 +164,22 @@ export default function DashboardPage() {
         <div className="space-y-5">
           {/* KPI grid */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 stagger">
-            <KpiCard icon={MessageSquare} label="Conversaciones"    value={kpis.conversations.total}          sub={`${kpis.conversations.unique_users} usuarios únicos`} accent />
-            <KpiCard icon={TrendingUp}    label="Completadas"       value={`${kpis.conversations.pct_completed}%`} sub={`${kpis.conversations.completed} sesiones`} />
-            <KpiCard icon={Headphones}   label="Escaladas a agente" value={kpis.agents.escalated}              sub={`${kpis.agents.pct_escalated}% del total`} />
-            <KpiCard icon={CalendarCheck} label="Citas confirmadas" value={kpis.appointments.confirmed}        sub={`${kpis.appointments.conversion_pct}% conversión`} />
-            <KpiCard icon={CreditCard}   label="Pagos verificados"  value={kpis.sales.verified_payments}       sub="pagos confirmados" />
-            <KpiCard icon={DollarSign}   label="Ingresos canal"     value={`$${kpis.sales.total_revenue_usd.toFixed(2)}`} sub="USD verificados" />
-            <KpiCard icon={Users}        label="FAQ resueltas"       value={kpis.events?.faq_resolved || 0}     sub="sin escalar a agente" />
-            <KpiCard icon={Star}         label="Satisfacción"       value="—"                                  sub="Encuesta pendiente" />
+            {KPI_CARDS.map(card => (
+              <KpiCard key={card.label} {...card} />
+            ))}
           </div>
 
           {/* Plan + Distribución */}
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
-            <HeroMetric count={kpis.plan_usage.count} limit={kpis.plan_usage.limit} pct={kpis.plan_usage.percentage} />
-
-            {/* Distribución de estados */}
+            <HeroMetric
+              count={kpis.plan_usage.count}
+              limit={kpis.plan_usage.limit}
+              pct={kpis.plan_usage.percentage}
+            />
             <div className="bg-white rounded-2xl border border-[#e5ddd4] p-5 lg:col-span-2">
               <p className="text-xs font-semibold text-[#7a6a55] uppercase tracking-wider mb-4">Distribución de estados</p>
               <div className="space-y-3">
-                {Object.entries(statusDist).length === 0 ? (
+                {Object.keys(statusDist).length === 0 ? (
                   <p className="text-sm text-[#7a6a55] text-center py-4">Sin conversaciones aún</p>
                 ) : Object.entries(statusDist).map(([status, count]) => {
                   const total = kpis.conversations.total || 1
@@ -190,11 +199,12 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* Gráfica de tendencia + Actividad reciente */}
+          {/* Gráfica + Actividad reciente */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            {/* Gráfica de área */}
             <div className="bg-white rounded-2xl border border-[#e5ddd4] p-5 lg:col-span-2">
-              <p className="text-xs font-semibold text-[#7a6a55] uppercase tracking-wider mb-4">Tendencia — últimos {days} días</p>
+              <p className="text-xs font-semibold text-[#7a6a55] uppercase tracking-wider mb-4">
+                Tendencia — últimos {days} días
+              </p>
               {timeline.length > 1 ? (
                 <ResponsiveContainer width="100%" height={180}>
                   <AreaChart data={timeline} margin={{ top: 4, right: 4, bottom: 0, left: -20 }}>
@@ -217,7 +227,7 @@ export default function DashboardPage() {
                 </ResponsiveContainer>
               ) : (
                 <div className="flex flex-col items-center justify-center h-40 text-center">
-                  <Icons.TrendingUp />
+                  <div className="mb-2 opacity-20"><Icons.TrendingUp /></div>
                   <p className="text-sm text-[#7a6a55]">Sin datos suficientes para la gráfica</p>
                   <p className="text-xs text-[#7a6a55]/60 mt-0.5">Aparecerá después de las primeras conversaciones</p>
                 </div>
@@ -230,28 +240,26 @@ export default function DashboardPage() {
               <div className="space-y-2">
                 {activity.length === 0 ? (
                   <p className="text-sm text-[#7a6a55] text-center py-4">Sin actividad</p>
-                ) : activity.map((s: any) => {
-                  const statusColor = STATUS_COLORS[s.status] || '#7a6a55'
-                  return (
-                    <div key={s.session_id} className="flex items-center gap-2.5 py-2 border-b border-[#e5ddd4] last:border-0">
-                      <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
-                        style={{ background: '#F5F1EB', color: '#0b4c45' }}>
-                        {(s.patient_name || '?').charAt(0)}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-semibold text-[#0b4c45] truncate">{s.patient_name || 'Desconocido'}</p>
-                        <p className="text-[10px] text-[#7a6a55] font-mono">{s.whatsapp_number}</p>
-                      </div>
-                      <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: statusColor }} />
+                ) : activity.map((s: any) => (
+                  <div key={s.session_id} className="flex items-center gap-2.5 py-2 border-b border-[#e5ddd4] last:border-0">
+                    <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
+                      style={{ background: '#F5F1EB', color: '#0b4c45' }}>
+                      {(s.patient_name || '?').charAt(0)}
                     </div>
-                  )
-                })}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-semibold text-[#0b4c45] truncate">{s.patient_name || 'Desconocido'}</p>
+                      <p className="text-[10px] text-[#7a6a55] font-mono">{s.whatsapp_number}</p>
+                    </div>
+                    <div className="w-2 h-2 rounded-full flex-shrink-0"
+                      style={{ background: STATUS_COLORS[s.status] || '#7a6a55' }} />
+                  </div>
+                ))}
               </div>
             </div>
           </div>
         </div>
       ) : (
-        <div className="text-center py-16 text-[#7a6a55]">Error cargando datos. Verifica la conexión al backend.</div>
+        <div className="text-center py-16 text-[#7a6a55]">Error cargando datos.</div>
       )}
     </div>
   )
