@@ -1,6 +1,7 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import Icons from '../components/Icons'
 import { useAuth } from '../context/AuthContext'
+import { LOGO_MONO_WHITE } from '../assets/logos'
 
 const NAV_ITEMS = [
   { to: '/',              label: 'Dashboard',       Icon: Icons.Dashboard, roles: ['admin', 'supervisor'] },

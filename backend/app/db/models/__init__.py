@@ -3,6 +3,8 @@ from app.db.models.session import Session
 from app.db.models.agent import Agent
 from app.db.models.appointment import Appointment
 from app.db.models.payment import Payment
+from app.db.models.analytics import AnalyticsEvent
+from app.db.models.delivery import Delivery, Shipment
 from app.db.models.messaging import MessageLog, FAQ, PlanUsage, OutboxMessage, InboxMessage
 
 __all__ = [
@@ -11,12 +13,12 @@ __all__ = [
     "Agent",
     "Appointment",
     "Payment",
+    "AnalyticsEvent",
+    "Delivery",
+    "Shipment",
     "MessageLog",
     "FAQ",
     "PlanUsage",
     "OutboxMessage",
     "InboxMessage",
-    "AnalyticsEvent", 
-    "Delivery",
-    "Shipment",
 ]
