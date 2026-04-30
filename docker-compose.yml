@@ -28,6 +28,9 @@ services:
     restart: unless-stopped
     env_file:
       - ./backend/.env
+    environment:
+      GEMINI_MODEL: "gemini-2.5-flash"
+      WHATSAPP_PHONE_NUMBER_ID: "1134202206436878"
     ports:
       - "8001:8000"
     depends_on:
