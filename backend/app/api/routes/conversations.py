@@ -42,9 +42,9 @@ class TransferBody(BaseModel):
 @router.get("/")
 def list_conversations(
     status: str | None = None,
-    limit:  int = 50,
-    db:     DBSession = Depends(get_db),
-    agent:  Agent     = Depends(get_current_agent),
+    limit: int = 50,
+    db: DBSession = Depends(get_db),
+    agent: Agent = Depends(get_current_agent),
 ):
     """
     Admin/Supervisor → todas las conversaciones.
@@ -66,9 +66,17 @@ def list_conversations(
     sessions = q.limit(limit).all()
 
     result = []
+
     for s in sessions:
         patient = db.query(Patient).filter(Patient.id == s.patient_id).first()
-        assigned = db.query(Agent).filter(Agent.id == s.assigned_agent_id).first() if s.assigned_agent_id else None
+
+        assigned = (
+            db.query(Agent)
+            .filter(Agent.id == s.assigned_agent_id)
+            .first()
+            if s.assigned_agent_id
+            else None
+        )
 
         # Último mensaje
         last_msg = (
@@ -80,31 +88,42 @@ def list_conversations(
 
         # Resumen IA si existe
         ctx = s.context_json or {}
+
         if isinstance(ctx, str):
-            try: ctx = json.loads(ctx)
-            except: ctx = {}
+            try:
+                ctx = json.loads(ctx)
+            except Exception:
+                ctx = {}
 
         result.append({
-            "session_id":     s.id,
-            "status":         s.status,
-            "channel":        s.channel,
+            "session_id": s.id,
+            "status": s.status,
+            "channel": s.channel,
             "patient": {
-                "id":             patient.id if patient else None,
-                "name":           patient.full_name if patient else "Desconocido",
+                "id": patient.id if patient else None,
+                "name": patient.full_name if patient else "Desconocido",
                 "whatsapp_number": s.whatsapp_number,
-                "location_type":  patient.location_type if patient else "latam",
-                "is_recurrent":   bool(patient.is_recurrent) if patient else False,
+                "location_type": patient.location_type if patient else "latam",
+                "is_recurrent": bool(patient.is_recurrent) if patient else False,
             },
             "assigned_agent": {
-                "id":   assigned.id if assigned else None,
+                "id": assigned.id if assigned else None,
                 "name": assigned.name if assigned else None,
             } if assigned else None,
-            "last_message":   last_msg.content if last_msg else None,
+
+            # Último mensaje para vista rápida
+            "last_message": last_msg.content if last_msg else None,
             "last_message_at": str(last_msg.created_at) if last_msg else None,
-            "ai_summary":     ctx.get("agent_summary"),
+
+            # Campos necesarios para realtime/deduplicación en frontend
+            "last_message_id": last_msg.id if last_msg else None,
+            "last_message_direction": last_msg.direction if last_msg else None,
+            "last_message_sent_by_bot": bool(last_msg.sent_by_bot) if last_msg else None,
+
+            "ai_summary": ctx.get("agent_summary"),
             "escalation_reason": ctx.get("escalation_reason"),
-            "created_at":     str(s.created_at),
-            "updated_at":     str(s.updated_at),
+            "created_at": str(s.created_at),
+            "updated_at": str(s.updated_at),
         })
 
     return result
@@ -114,8 +133,8 @@ def list_conversations(
 @router.get("/{session_id}/messages")
 def get_messages(
     session_id: int,
-    db:    DBSession = Depends(get_db),
-    agent: Agent     = Depends(get_current_agent),
+    db: DBSession = Depends(get_db),
+    agent: Agent = Depends(get_current_agent),
 ):
     session = _get_session_or_403(session_id, agent, db)
 
@@ -127,33 +146,37 @@ def get_messages(
     )
 
     patient = db.query(Patient).filter(Patient.id == session.patient_id).first()
+
     ctx = session.context_json or {}
+
     if isinstance(ctx, str):
-        try: ctx = json.loads(ctx)
-        except: ctx = {}
+        try:
+            ctx = json.loads(ctx)
+        except Exception:
+            ctx = {}
 
     return {
         "session_id": session_id,
         "status": session.status,
         "patient": {
-            "id":              patient.id if patient else None,
-            "name":            patient.full_name if patient else "Desconocido",
+            "id": patient.id if patient else None,
+            "name": patient.full_name if patient else "Desconocido",
             "whatsapp_number": session.whatsapp_number,
-            "location_type":   patient.location_type if patient else "latam",
-            "is_recurrent":    bool(patient.is_recurrent) if patient else False,
+            "location_type": patient.location_type if patient else "latam",
+            "is_recurrent": bool(patient.is_recurrent) if patient else False,
         },
-        "ai_summary":        ctx.get("agent_summary"),
+        "ai_summary": ctx.get("agent_summary"),
         "escalation_reason": ctx.get("escalation_reason"),
-        "escalated_at":      ctx.get("escalated_at"),
+        "escalated_at": ctx.get("escalated_at"),
         "messages": [
             {
-                "id":           m.id,
-                "direction":    m.direction,
-                "content":      m.content,
+                "id": m.id,
+                "direction": m.direction,
+                "content": m.content,
                 "message_type": m.message_type,
-                "sent_by_bot":  bool(m.sent_by_bot),
-                "agent_id":     m.agent_id,
-                "created_at":   str(m.created_at),
+                "sent_by_bot": bool(m.sent_by_bot),
+                "agent_id": m.agent_id,
+                "created_at": str(m.created_at),
             }
             for m in messages
         ],
@@ -165,8 +188,8 @@ def get_messages(
 def send_message(
     session_id: int,
     body: SendMessageBody,
-    db:   DBSession = Depends(get_db),
-    agent: Agent    = Depends(get_current_agent),
+    db: DBSession = Depends(get_db),
+    agent: Agent = Depends(get_current_agent),
 ):
     """El agente escribe desde el dashboard → se envía por WhatsApp al cliente."""
     session = _get_session_or_403(session_id, agent, db)
@@ -175,24 +198,29 @@ def send_message(
         raise HTTPException(status_code=400, detail="El mensaje no puede estar vacío")
 
     number = session.whatsapp_number
+    clean_message = body.message.strip()
 
     # Encolar en outbox → WhatsApp
-    db.add(OutboxMessage(
-        whatsapp_number = number,
-        payload_json    = json.dumps({"to": number, "text": body.message.strip()}),
-        status          = "pending",
-    ))
+    db.add(
+        OutboxMessage(
+            whatsapp_number=number,
+            payload_json=json.dumps({"to": number, "text": clean_message}),
+            status="pending",
+        )
+    )
 
     # Registrar en log como mensaje del agente (no del bot)
-    db.add(MessageLog(
-        session_id      = session_id,
-        whatsapp_number = number,
-        direction       = "outbound",
-        content         = body.message.strip(),
-        message_type    = "text",
-        sent_by_bot     = 0,
-        agent_id        = agent.id,
-    ))
+    db.add(
+        MessageLog(
+            session_id=session_id,
+            whatsapp_number=number,
+            direction="outbound",
+            content=clean_message,
+            message_type="text",
+            sent_by_bot=0,
+            agent_id=agent.id,
+        )
+    )
 
     db.commit()
 
@@ -200,6 +228,7 @@ def send_message(
     flush_outbox()
 
     logger.info("Agente %s envió mensaje | session=%s", agent.name, session_id)
+
     return {"ok": True, "sent_by": agent.name}
 
 
@@ -207,11 +236,12 @@ def send_message(
 @router.post("/{session_id}/take")
 def take_conversation(
     session_id: int,
-    db:   DBSession = Depends(get_db),
-    agent: Agent    = Depends(get_current_agent),
+    db: DBSession = Depends(get_db),
+    agent: Agent = Depends(get_current_agent),
 ):
     """El agente toma manualmente una conversación activa."""
     session = db.query(Session).filter(Session.id == session_id).first()
+
     if not session:
         raise HTTPException(status_code=404, detail="Conversación no encontrada")
 
@@ -220,6 +250,7 @@ def take_conversation(
     # Liberar al agente anterior si existía
     if old_agent_id and old_agent_id != agent.id:
         old_agent = db.query(Agent).filter(Agent.id == old_agent_id).first()
+
         if old_agent:
             old_agent.current_load = max(0, (old_agent.current_load or 1) - 1)
 
@@ -228,6 +259,7 @@ def take_conversation(
     agent.current_load = (agent.current_load or 0) + 1
 
     db.commit()
+
     return {"ok": True, "assigned_to": agent.name}
 
 
@@ -235,8 +267,8 @@ def take_conversation(
 @router.post("/{session_id}/close")
 def close_conversation(
     session_id: int,
-    db:   DBSession = Depends(get_db),
-    agent: Agent    = Depends(get_current_agent),
+    db: DBSession = Depends(get_db),
+    agent: Agent = Depends(get_current_agent),
 ):
     """Cierra la conversación y libera al agente."""
     session = _get_session_or_403(session_id, agent, db)
@@ -245,7 +277,12 @@ def close_conversation(
 
     # Liberar carga del agente
     if session.assigned_agent_id:
-        assigned = db.query(Agent).filter(Agent.id == session.assigned_agent_id).first()
+        assigned = (
+            db.query(Agent)
+            .filter(Agent.id == session.assigned_agent_id)
+            .first()
+        )
+
         if assigned:
             assigned.current_load = max(0, (assigned.current_load or 1) - 1)
             assigned.total_closed = (assigned.total_closed or 0) + 1
@@ -261,6 +298,7 @@ def close_conversation(
     if patient and patient.whatsapp_number:
         try:
             agent_name = agent.name if agent else "nuestro equipo"
+
             survey_msg = (
                 f"¡Gracias por contactarnos! 💙\n\n"
                 f"Fuiste atendido/a por *{agent_name}*.\n\n"
@@ -273,7 +311,9 @@ def close_conversation(
                 "⭐⭐⭐⭐⭐ 5 - Excelente\n\n"
                 "_Responde con el número del 1 al 5_ 🙏"
             )
+
             import json as _json
+
             outbox = OutboxMessage(
                 whatsapp_number=patient.whatsapp_number,
                 payload_json=_json.dumps({
@@ -282,14 +322,19 @@ def close_conversation(
                 }),
                 status="pending",
             )
+
             db.add(outbox)
             db.commit()
+
             flush_outbox()
+
             logger.info("Encuesta enviada a %s", patient.whatsapp_number)
+
         except Exception as e:
             logger.warning("Error enviando encuesta: %s", e)
 
     logger.info("Conversación cerrada | session=%s | agent=%s", session_id, agent.name)
+
     return {"ok": True, "closed_by": agent.name}
 
 
@@ -298,19 +343,29 @@ def close_conversation(
 def transfer_conversation(
     session_id: int,
     body: TransferBody,
-    db:   DBSession = Depends(get_db),
-    agent: Agent    = Depends(get_current_agent),
+    db: DBSession = Depends(get_db),
+    agent: Agent = Depends(get_current_agent),
 ):
     """Transfiere la conversación a otro agente."""
     session = _get_session_or_403(session_id, agent, db)
 
-    target = db.query(Agent).filter(Agent.id == body.agent_id, Agent.is_active == 1).first()
+    target = (
+        db.query(Agent)
+        .filter(Agent.id == body.agent_id, Agent.is_active == 1)
+        .first()
+    )
+
     if not target:
         raise HTTPException(status_code=404, detail="Agente destino no encontrado")
 
     # Liberar agente actual
     if session.assigned_agent_id:
-        current = db.query(Agent).filter(Agent.id == session.assigned_agent_id).first()
+        current = (
+            db.query(Agent)
+            .filter(Agent.id == session.assigned_agent_id)
+            .first()
+        )
+
         if current:
             current.current_load = max(0, (current.current_load or 1) - 1)
 
@@ -320,38 +375,55 @@ def transfer_conversation(
     target.current_load = (target.current_load or 0) + 1
 
     db.commit()
-    logger.info("Conversación transferida | session=%s | from=%s | to=%s", session_id, agent.name, target.name)
+
+    logger.info(
+        "Conversación transferida | session=%s | from=%s | to=%s",
+        session_id,
+        agent.name,
+        target.name,
+    )
+
     return {"ok": True, "transferred_to": target.name}
 
 
 # ── Estadísticas rápidas para el agente ───────────────────────────────────────
 @router.get("/stats/me")
 def my_stats(
-    db:   DBSession = Depends(get_db),
-    agent: Agent    = Depends(get_current_agent),
+    db: DBSession = Depends(get_db),
+    agent: Agent = Depends(get_current_agent),
 ):
     """Estadísticas personales del agente autenticado."""
-    active = db.query(Session).filter(
-        Session.assigned_agent_id == agent.id,
-        Session.status == "in_agent"
-    ).count()
+    active = (
+        db.query(Session)
+        .filter(
+            Session.assigned_agent_id == agent.id,
+            Session.status == "in_agent",
+        )
+        .count()
+    )
 
     return {
-        "agent_id":      agent.id,
-        "name":          agent.name,
-        "role":          agent.role,
-        "current_load":  agent.current_load or 0,
-        "total_closed":  agent.total_closed or 0,
-        "active_now":    active,
+        "agent_id": agent.id,
+        "name": agent.name,
+        "role": agent.role,
+        "current_load": agent.current_load or 0,
+        "total_closed": agent.total_closed or 0,
+        "active_now": active,
     }
 
 
 # ── Helper: verificar acceso a la sesión ─────────────────────────────────────
 def _get_session_or_403(session_id: int, agent: Agent, db: DBSession) -> Session:
     session = db.query(Session).filter(Session.id == session_id).first()
+
     if not session:
         raise HTTPException(status_code=404, detail="Conversación no encontrada")
+
     # Agente solo puede acceder a sus conversaciones asignadas
     if agent.role == "agent" and session.assigned_agent_id != agent.id:
-        raise HTTPException(status_code=403, detail="No tienes acceso a esta conversación")
+        raise HTTPException(
+            status_code=403,
+            detail="No tienes acceso a esta conversación",
+        )
+
     return session

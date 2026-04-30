@@ -19,7 +19,9 @@ function playNotificationSound() {
 
         oscillator.start(ctx.currentTime)
         oscillator.stop(ctx.currentTime + 0.4)
-    } catch {}
+    } catch {
+        // Algunos navegadores bloquean audio hasta que el usuario interactúa.
+    }
 }
 
 interface Message {
@@ -66,6 +68,8 @@ interface ConversationDetail {
     messages: Message[]
 }
 
+type WsStatus = 'connecting' | 'connected' | 'disconnected'
+
 const statusColors: Record<string, string> = {
     active: 'bg-brand-100 text-brand-700',
     in_agent: 'bg-blue-100 text-blue-700',
@@ -101,13 +105,14 @@ export default function ConversationsPage() {
     const [agents, setAgents] = useState<any[]>([])
     const [showTransfer, setShowTransfer] = useState(false)
     const [newMessageAlert, setNewMessageAlert] = useState<string | null>(null)
-    const [wsStatus, setWsStatus] = useState<'connecting' | 'connected' | 'disconnected'>('connecting')
+    const [wsStatus, setWsStatus] = useState<WsStatus>('connecting')
 
     const messagesEndRef = useRef<HTMLDivElement>(null)
     const socketRef = useRef<WebSocket | null>(null)
     const reconnectTimeoutRef = useRef<number | null>(null)
     const reconnectAttemptRef = useRef(0)
     const selectedIdRef = useRef<number | null>(null)
+    const alertTimeoutRef = useRef<number | null>(null)
 
     useEffect(() => {
         selectedIdRef.current = selectedId
@@ -117,7 +122,9 @@ export default function ConversationsPage() {
         conversationsApi
             .list(filter || undefined)
             .then(r => setConversations(r.data))
-            .catch(() => {})
+            .catch(error => {
+                console.warn('Error cargando conversaciones', error)
+            })
     }, [filter])
 
     // ✅ Carga inicial solamente. No hay polling.
@@ -125,13 +132,23 @@ export default function ConversationsPage() {
         loadConversations()
     }, [loadConversations])
 
-    // 🔥 WebSocket realtime con reconexión automática
+    // ✅ Solicitar permiso para notificación del navegador.
+    useEffect(() => {
+        if ('Notification' in window && Notification.permission === 'default') {
+            Notification.requestPermission().catch(() => {})
+        }
+    }, [])
+
+    // 🔥 WebSocket realtime con reconexión automática.
     useEffect(() => {
         let manuallyClosed = false
 
         const connectWebSocket = () => {
             const token = localStorage.getItem('llv_token')
-            if (!token) return
+            if (!token) {
+                setWsStatus('disconnected')
+                return
+            }
 
             setWsStatus('connecting')
 
@@ -156,48 +173,85 @@ export default function ConversationsPage() {
                     if (data.type !== 'new_message') return
                     if (data.direction !== 'inbound') return
 
+                    const currentAgentId = agent?.agent_id || agent?.id
+
+                    // Si es asesor normal, solo debe recibir notificaciones de sus conversaciones.
+                    if (
+                        agent?.role === 'agent' &&
+                        data.assigned_agent_id &&
+                        Number(data.assigned_agent_id) !== Number(currentAgentId)
+                    ) {
+                        return
+                    }
+
+                    const messageId = Number(data.message_id || Date.now())
+                    const sessionId = Number(data.session_id)
+                    const customerName = data.customer_name || data.whatsapp_number || 'Cliente'
+
                     playNotificationSound()
 
-                    setNewMessageAlert(
-                        `Nuevo mensaje de ${data.customer_name || data.whatsapp_number || 'Cliente'}`
-                    )
+                    setNewMessageAlert(`Nuevo mensaje de ${customerName}`)
 
-                    setTimeout(() => {
+                    if (alertTimeoutRef.current) {
+                        window.clearTimeout(alertTimeoutRef.current)
+                    }
+
+                    alertTimeoutRef.current = window.setTimeout(() => {
                         setNewMessageAlert(null)
                     }, 4000)
 
-                    // Actualiza la lista local sin consultar API
+                    if ('Notification' in window && Notification.permission === 'granted') {
+                        new Notification('LLV Assistant', {
+                            body: `Nuevo mensaje de ${customerName}`,
+                        })
+                    }
+
+                    // Actualiza la lista local sin consultar API.
                     setConversations(prev => {
-                        const exists = prev.some(conv => conv.session_id === data.session_id)
+                        const exists = prev.some(conv => conv.session_id === sessionId)
 
                         if (!exists) {
+                            // Única excepción: si la conversación no está en la lista,
+                            // se recarga una vez para traerla.
                             loadConversations()
                             return prev
                         }
 
-                        return prev.map(conv =>
-                            conv.session_id === data.session_id
-                                    ? {
-                                        ...conv,
-                                        last_message: data.content,
-                                        last_message_at: data.created_at,
-                                        last_message_direction: data.direction,
-                                        updated_at: data.created_at,
-                                    }
+                        const updated = prev.map(conv =>
+                            conv.session_id === sessionId
+                                ? {
+                                      ...conv,
+                                      last_message: data.content,
+                                      last_message_at: data.created_at,
+                                      last_message_id: messageId,
+                                      last_message_direction: data.direction,
+                                      last_message_sent_by_bot: false,
+                                      updated_at: data.created_at,
+                                  }
                                 : conv
                         )
+
+                        return updated.sort((a, b) => {
+                            const dateA = new Date(a.updated_at || a.last_message_at || 0).getTime()
+                            const dateB = new Date(b.updated_at || b.last_message_at || 0).getTime()
+                            return dateB - dateA
+                        })
                     })
 
-                    // Actualiza el chat abierto sin consultar API
+                    // Actualiza el chat abierto sin consultar API y sin duplicar.
                     setSelected(prev => {
-                        if (!prev || prev.session_id !== data.session_id) return prev
+                        if (!prev || prev.session_id !== sessionId) return prev
+
+                        const alreadyExists = prev.messages.some(msg => msg.id === messageId)
+
+                        if (alreadyExists) return prev
 
                         return {
                             ...prev,
                             messages: [
                                 ...prev.messages,
                                 {
-                                    id: data.message_id || Date.now(),
+                                    id: messageId,
                                     direction: data.direction,
                                     content: data.content,
                                     sent_by_bot: false,
@@ -244,18 +298,24 @@ export default function ConversationsPage() {
                 window.clearTimeout(reconnectTimeoutRef.current)
             }
 
+            if (alertTimeoutRef.current) {
+                window.clearTimeout(alertTimeoutRef.current)
+            }
+
             if (socketRef.current) {
                 socketRef.current.close()
             }
         }
-    }, [loadConversations])
+    }, [agent?.agent_id, agent?.id, agent?.role, loadConversations])
 
     useEffect(() => {
         if (isAdmin) {
             agentsApi
                 .list()
                 .then(r => setAgents(r.data.filter((a: any) => a.is_active)))
-                .catch(() => {})
+                .catch(error => {
+                    console.warn('Error cargando agentes', error)
+                })
         }
     }, [isAdmin])
 
@@ -281,11 +341,15 @@ export default function ConversationsPage() {
         setSending(true)
 
         const textToSend = message.trim()
+        const tempId = Date.now()
+        const createdAt = new Date().toISOString()
+
         setMessage('')
 
         try {
             await conversationsApi.send(selectedId, textToSend)
 
+            // Actualización local del chat abierto.
             setSelected(prev => {
                 if (!prev || prev.session_id !== selectedId) return prev
 
@@ -294,29 +358,36 @@ export default function ConversationsPage() {
                     messages: [
                         ...prev.messages,
                         {
-                            id: Date.now(),
+                            id: tempId,
                             direction: 'outbound',
                             content: textToSend,
                             sent_by_bot: false,
-                            agent_id: agent?.agent_id || null,
-                            created_at: new Date().toISOString(),
+                            agent_id: agent?.agent_id || agent?.id || null,
+                            created_at: createdAt,
                         },
                     ],
                 }
             })
 
+            // Actualización local de la lista.
             setConversations(prev =>
                 prev.map(conv =>
                     conv.session_id === selectedId
-                            ? {
-                                ...conv,
-                                last_message: textToSend,
-                                last_message_at: new Date().toISOString(),
-                                last_message_direction: 'outbound',
-                            }
+                        ? {
+                              ...conv,
+                              last_message: textToSend,
+                              last_message_at: createdAt,
+                              last_message_id: tempId,
+                              last_message_direction: 'outbound',
+                              last_message_sent_by_bot: false,
+                              updated_at: createdAt,
+                          }
                         : conv
                 )
             )
+        } catch (error) {
+            console.warn('Error enviando mensaje', error)
+            setMessage(textToSend)
         } finally {
             setSending(false)
         }
@@ -398,7 +469,7 @@ export default function ConversationsPage() {
             <div className="flex h-full w-full">
                 <div className="w-80 flex-shrink-0 border-r border-[#e4ede8] bg-white flex flex-col">
                     <div className="px-4 py-4 border-b border-[#e4ede8]">
-                        <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-start justify-between mb-3">
                             <div>
                                 <h2 className="font-display font-bold text-brand-800">
                                     Conversaciones
@@ -406,13 +477,21 @@ export default function ConversationsPage() {
 
                                 <div className="text-[10px] mt-1">
                                     {wsStatus === 'connected' && (
-                                        <span className="text-green-600">● Tiempo real activo</span>
+                                        <span className="text-green-600">
+                                            ● Tiempo real activo
+                                        </span>
                                     )}
+
                                     {wsStatus === 'connecting' && (
-                                        <span className="text-amber-600">● Conectando realtime...</span>
+                                        <span className="text-amber-600">
+                                            ● Conectando realtime...
+                                        </span>
                                     )}
+
                                     {wsStatus === 'disconnected' && (
-                                        <span className="text-red-500">● Reconectando realtime...</span>
+                                        <span className="text-red-500">
+                                            ● Reconectando realtime...
+                                        </span>
                                     )}
                                 </div>
                             </div>
@@ -450,6 +529,7 @@ export default function ConversationsPage() {
                         {filtered.length === 0 ? (
                             <div className="p-6 text-center text-sm text-[#6b8a78]">
                                 Sin conversaciones
+                                {filter ? ` con estado "${statusLabels[filter]}"` : ''}
                             </div>
                         ) : (
                             filtered.map(conv => (
@@ -486,13 +566,18 @@ export default function ConversationsPage() {
                                             </div>
                                         </div>
 
-                                        <span className={`badge text-[9px] flex-shrink-0 ${statusColors[conv.status]}`}>
+                                        <span
+                                            className={`badge text-[9px] flex-shrink-0 ${statusColors[conv.status]}`}
+                                        >
                                             {statusLabels[conv.status]}
                                         </span>
                                     </div>
 
                                     {conv.last_message && (
                                         <p className="text-[11px] text-[#6b8a78] truncate ml-10">
+                                            {conv.last_message_direction === 'inbound'
+                                                ? 'Cliente: '
+                                                : 'Equipo: '}
                                             {conv.last_message}
                                         </p>
                                     )}
@@ -518,12 +603,33 @@ export default function ConversationsPage() {
                             </h3>
 
                             <p className="text-sm text-[#6b8a78] max-w-xs">
-                                Selecciona una conversación de la lista para ver el historial y responder.
+                                {isAdmin
+                                    ? 'Selecciona una conversación de la lista para ver el historial y responder.'
+                                    : 'Selecciona una conversación asignada a ti para responder al cliente.'}
                             </p>
                         </div>
                     ) : loadingDetail ? (
                         <div className="flex-1 flex items-center justify-center">
-                            Cargando conversación...
+                            <svg
+                                className="animate-spin w-8 h-8 text-brand-500"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                            >
+                                <circle
+                                    cx="12"
+                                    cy="12"
+                                    r="10"
+                                    stroke="currentColor"
+                                    strokeWidth="3"
+                                    strokeOpacity=".2"
+                                />
+                                <path
+                                    d="M12 2a10 10 0 0 1 10 10"
+                                    stroke="currentColor"
+                                    strokeWidth="3"
+                                    strokeLinecap="round"
+                                />
+                            </svg>
                         </div>
                     ) : (
                         <>
@@ -577,7 +683,7 @@ export default function ConversationsPage() {
                                             {showTransfer && (
                                                 <div className="absolute right-0 top-full mt-1 bg-white border border-[#e4ede8] rounded-xl shadow-lg z-10 w-48 py-1">
                                                     {agents
-                                                        .filter(a => a.id !== agent?.agent_id)
+                                                        .filter(a => a.id !== (agent?.agent_id || agent?.id))
                                                         .map((a: any) => (
                                                             <button
                                                                 key={a.id}
@@ -595,14 +701,15 @@ export default function ConversationsPage() {
                                         </div>
                                     )}
 
-                                    {selected.status !== 'completed' && selected.status !== 'closed' && (
-                                        <button
-                                            onClick={handleClose}
-                                            className="btn-ghost py-1.5 px-3 text-xs border border-red-200 text-red-500 hover:bg-red-50"
-                                        >
-                                            ✓ Cerrar
-                                        </button>
-                                    )}
+                                    {selected.status !== 'completed' &&
+                                        selected.status !== 'closed' && (
+                                            <button
+                                                onClick={handleClose}
+                                                className="btn-ghost py-1.5 px-3 text-xs border border-red-200 text-red-500 hover:bg-red-50"
+                                            >
+                                                ✓ Cerrar
+                                            </button>
+                                        )}
                                 </div>
                             </div>
 
@@ -655,10 +762,13 @@ export default function ConversationsPage() {
                                             </p>
 
                                             <div className="text-[9px] mt-1 opacity-60 text-right">
-                                                {new Date(msg.created_at).toLocaleTimeString('es', {
-                                                    hour: '2-digit',
-                                                    minute: '2-digit',
-                                                })}
+                                                {new Date(msg.created_at).toLocaleTimeString(
+                                                    'es',
+                                                    {
+                                                        hour: '2-digit',
+                                                        minute: '2-digit',
+                                                    }
+                                                )}
                                             </div>
                                         </div>
                                     </div>
@@ -697,7 +807,40 @@ export default function ConversationsPage() {
                                             disabled={sending || !message.trim()}
                                             className="btn-primary px-4 py-2.5 flex-shrink-0 disabled:opacity-40"
                                         >
-                                            {sending ? '...' : 'Enviar'}
+                                            {sending ? (
+                                                <svg
+                                                    className="animate-spin w-4 h-4"
+                                                    viewBox="0 0 24 24"
+                                                    fill="none"
+                                                >
+                                                    <circle
+                                                        cx="12"
+                                                        cy="12"
+                                                        r="10"
+                                                        stroke="currentColor"
+                                                        strokeWidth="3"
+                                                        strokeOpacity=".3"
+                                                    />
+                                                    <path
+                                                        d="M12 2a10 10 0 0 1 10 10"
+                                                        stroke="currentColor"
+                                                        strokeWidth="3"
+                                                        strokeLinecap="round"
+                                                    />
+                                                </svg>
+                                            ) : (
+                                                <svg
+                                                    width="16"
+                                                    height="16"
+                                                    viewBox="0 0 24 24"
+                                                    fill="none"
+                                                    stroke="currentColor"
+                                                    strokeWidth="2"
+                                                >
+                                                    <line x1="22" y1="2" x2="11" y2="13" />
+                                                    <polygon points="22,2 15,22 11,13 2,9" />
+                                                </svg>
+                                            )}
                                         </button>
                                     </div>
 
@@ -707,7 +850,8 @@ export default function ConversationsPage() {
                                 </div>
                             ) : (
                                 <div className="bg-gray-50 border-t border-[#e4ede8] px-4 py-3 text-center text-xs text-[#6b8a78]">
-                                    {selected.status === 'completed' || selected.status === 'closed'
+                                    {selected.status === 'completed' ||
+                                    selected.status === 'closed'
                                         ? '✓ Conversación cerrada'
                                         : 'Toma la conversación para poder responder'}
                                 </div>

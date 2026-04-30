@@ -1,10 +1,17 @@
 """
 app/services/agent_router.py
 
-Distribución de carga entre los 6 agentes de LRV.
-Algoritmo: round-robin ponderado por current_load (menor carga = prioridad).
+Distribución de carga entre agentes de LLV.
+
+Objetivo:
+- No asignar siempre al primer agente cuando varios tienen la misma carga.
+- Priorizar agentes activos del mismo location del paciente.
+- Si no hay agentes en ese location, usar cualquier agente activo.
+- Elegir aleatoriamente entre los agentes con menor carga actual.
 """
+
 import logging
+import random
 
 from sqlalchemy.orm import Session as DBSession
 
@@ -20,10 +27,17 @@ class AgentRouter:
 
     def assign_agent(self, session: Session, location: str = "latam") -> Agent | None:
         """
-        Asigna el agente disponible con menor carga del location correcto.
-        Actualiza current_load y el campo assigned_agent_id de la sesión.
+        Asigna una conversación al agente disponible con menor carga.
+
+        Regla principal:
+        1. Busca agentes activos del mismo location.
+        2. Si no encuentra, busca agentes activos globales.
+        3. Calcula la menor carga actual.
+        4. Si varios agentes tienen esa misma carga, escoge uno aleatoriamente.
+        5. Incrementa current_load y marca la sesión como in_agent.
         """
-        # Buscar agentes activos del location, ordenados por carga ascendente
+
+        # 1. Buscar agentes activos del location del paciente
         agents = (
             self.db.query(Agent)
             .filter(
@@ -31,51 +45,94 @@ class AgentRouter:
                 Agent.location == location,
                 Agent.role.in_(["agent", "supervisor"]),
             )
-            .order_by(Agent.current_load.asc())
             .all()
         )
 
+        # 2. Fallback: cualquier agente activo con rol operativo
         if not agents:
-            # Fallback: cualquier agente activo sin importar location
             agents = (
                 self.db.query(Agent)
-                .filter(Agent.is_active == 1)
-                .order_by(Agent.current_load.asc())
+                .filter(
+                    Agent.is_active == 1,
+                    Agent.role.in_(["agent", "supervisor"]),
+                )
                 .all()
             )
 
         if not agents:
-            logger.warning("No hay agentes disponibles para asignar. session_id=%s", session.id)
+            logger.warning(
+                "No hay agentes disponibles para asignar. session_id=%s | location=%s",
+                session.id,
+                location,
+            )
             return None
 
-        selected = agents[0]
+        # 3. Obtener menor carga actual
+        min_load = min(agent.current_load or 0 for agent in agents)
 
-        # Actualizar carga
+        # 4. Candidatos con menor carga
+        candidates = [
+            agent
+            for agent in agents
+            if (agent.current_load or 0) == min_load
+        ]
+
+        # 5. Escoger aleatoriamente entre los menos cargados
+        selected = random.choice(candidates)
+
+        # 6. Actualizar carga y sesión
         selected.current_load = (selected.current_load or 0) + 1
         session.assigned_agent_id = selected.id
         session.status = "in_agent"
+
         self.db.flush()
 
         logger.info(
-            "Agente asignado | agent=%s (id=%s) | load=%s | session=%s",
+            "Agente asignado | agent=%s | id=%s | location=%s | load=%s | session=%s | candidates=%s",
             selected.name,
             selected.id,
+            selected.location,
             selected.current_load,
             session.id,
+            [a.id for a in candidates],
         )
+
         return selected
 
     def release_agent(self, session: Session) -> None:
         """
         Libera al agente cuando se cierra una conversación.
-        Decrementa current_load e incrementa total_closed.
+
+        - Decrementa current_load.
+        - Incrementa total_closed.
         """
         if not session.assigned_agent_id:
             return
 
-        agent = self.db.query(Agent).filter(Agent.id == session.assigned_agent_id).first()
-        if agent:
-            agent.current_load = max(0, (agent.current_load or 1) - 1)
-            agent.total_closed = (agent.total_closed or 0) + 1
-            self.db.flush()
-            logger.info("Agente liberado | agent=%s | new_load=%s", agent.name, agent.current_load)
+        agent = (
+            self.db.query(Agent)
+            .filter(Agent.id == session.assigned_agent_id)
+            .first()
+        )
+
+        if not agent:
+            logger.warning(
+                "No se encontró agente para liberar. session_id=%s | assigned_agent_id=%s",
+                session.id,
+                session.assigned_agent_id,
+            )
+            return
+
+        agent.current_load = max(0, (agent.current_load or 1) - 1)
+        agent.total_closed = (agent.total_closed or 0) + 1
+
+        self.db.flush()
+
+        logger.info(
+            "Agente liberado | agent=%s | id=%s | new_load=%s | total_closed=%s | session=%s",
+            agent.name,
+            agent.id,
+            agent.current_load,
+            agent.total_closed,
+            session.id,
+        )

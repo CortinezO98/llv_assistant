@@ -31,7 +31,13 @@ class NotificationService:
     def get_or_create_current_period(self) -> PlanUsage:
         today = date.today()
         period = date(today.year, today.month, 1)
-        usage = self.db.query(PlanUsage).filter(PlanUsage.period_month == period).first()
+
+        usage = (
+            self.db.query(PlanUsage)
+            .filter(PlanUsage.period_month == period)
+            .first()
+        )
+
         if not usage:
             usage = PlanUsage(
                 period_month=period,
@@ -40,6 +46,7 @@ class NotificationService:
             )
             self.db.add(usage)
             self.db.flush()
+
         return usage
 
     def increment_conversation(self) -> PlanUsage:
@@ -49,7 +56,7 @@ class NotificationService:
 
         limit = usage.plan_limit or settings.plan_monthly_limit
         count = usage.conversation_count
-        pct   = count / limit
+        pct = count / limit if limit else 0
 
         if pct >= 0.80 and not usage.alert_80_sent and settings.alert_email_80_percent:
             self._send_alert_80(count, limit)
@@ -64,15 +71,45 @@ class NotificationService:
         return usage
 
     def get_current_usage(self) -> dict:
+        """
+        Fuente confiable para el dashboard:
+        calcula el uso mensual desde llv_analytics_events, no desde el contador acumulado.
+
+        Esto evita desfases cuando:
+        - una conversación no incrementó PlanUsage correctamente,
+        - se corrigió manualmente una sesión,
+        - hubo reinicios o errores antes del commit,
+        - el dashboard necesita reflejar conversaciones reales.
+        """
+        from sqlalchemy import func
+        from app.db.models.analytics import AnalyticsEvent
+
+        today = date.today()
+        period_start = date(today.year, today.month, 1)
+
+        real_count = (
+            self.db.query(func.count(AnalyticsEvent.id))
+            .filter(
+                AnalyticsEvent.event_type == "conversation_started",
+                AnalyticsEvent.created_at >= period_start,
+            )
+            .scalar()
+            or 0
+        )
+
         usage = self.get_or_create_current_period()
+        usage.conversation_count = real_count
+        self.db.flush()
+
         limit = usage.plan_limit or settings.plan_monthly_limit
+
         return {
-            "period":          str(usage.period_month),
-            "count":           usage.conversation_count,
-            "limit":           limit,
-            "percentage":      round((usage.conversation_count / limit) * 100, 1),
-            "alert_80_sent":   bool(usage.alert_80_sent),
-            "alert_100_sent":  bool(usage.alert_100_sent),
+            "period": str(usage.period_month),
+            "count": real_count,
+            "limit": limit,
+            "percentage": round((real_count / limit) * 100, 1) if limit else 0,
+            "alert_80_sent": bool(usage.alert_80_sent),
+            "alert_100_sent": bool(usage.alert_100_sent),
         }
 
     # ── NOTIFICACIÓN AL AGENTE ────────────────────────────────────────────────
@@ -95,6 +132,7 @@ class NotificationService:
             return
 
         hora = datetime.now().strftime("%I:%M %p")
+
         summary_html = ""
         if ai_summary:
             summary_html = f"""
@@ -177,11 +215,12 @@ class NotificationService:
         if not settings.smtp_user or not settings.smtp_password:
             logger.warning("SMTP no configurado — no se envió: %s", subject)
             return
+
         try:
             msg = MIMEMultipart("alternative")
             msg["Subject"] = subject
-            msg["From"]    = f"{settings.smtp_from_name} <{settings.smtp_user}>"
-            msg["To"]      = to_email
+            msg["From"] = f"{settings.smtp_from_name} <{settings.smtp_user}>"
+            msg["To"] = to_email
             msg.attach(MIMEText(html_body, "html", "utf-8"))
 
             with smtplib.SMTP(settings.smtp_host, settings.smtp_port) as server:
@@ -191,6 +230,7 @@ class NotificationService:
                 server.sendmail(settings.smtp_user, to_email, msg.as_string())
 
             logger.info("Email enviado a %s | %s", to_email, subject)
+
         except Exception as exc:
             logger.exception("Error enviando email a %s: %s", to_email, exc)
 
@@ -200,6 +240,7 @@ class NotificationService:
 
     def _send_alert_80(self, count: int, limit: int) -> None:
         subject = "[LLV Assistant] ⚠️ Has usado el 80% de tus conversaciones"
+
         html = f"""
         <div style="font-family:Arial,sans-serif;max-width:600px;margin:auto">
           <div style="background:#0b4c45;padding:20px;border-radius:8px 8px 0 0">
@@ -214,10 +255,12 @@ class NotificationService:
           </div>
         </div>
         """
+
         self._send_email(subject, html)
 
     def _send_alert_100(self, count: int, limit: int) -> None:
         subject = "[LLV Assistant] 🚨 Límite de conversaciones alcanzado"
+
         html = f"""
         <div style="font-family:Arial,sans-serif;max-width:600px;margin:auto">
           <div style="background:#B71C1C;padding:20px;border-radius:8px 8px 0 0">
@@ -232,4 +275,5 @@ class NotificationService:
           </div>
         </div>
         """
+
         self._send_email(subject, html)
