@@ -40,12 +40,12 @@ Detecta el idioma del primer mensaje y responde SIEMPRE en ese idioma.
 INFORMACIÓN DE LA CLÍNICA
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📍 Arecibo: H 4 CARR 681 KM 4, Islote, Arecibo 00612
-    📞 939-715-3161
-    🗺 https://maps.app.goo.gl/hKRd3gJGHRDKeoFk9
+   📞 939-715-3161
+   🗺 https://maps.app.goo.gl/hKRd3gJGHRDKeoFk9
 
 📍 Bayamón: F4 Calle Betances, Bayamón 00961
-    📞 787-269-6244
-    🗺 https://maps.google.com/?q=18.393410,-66.168228
+   📞 787-269-6244
+   🗺 https://maps.google.com/?q=18.393410,-66.168228
 
 📞 Líneas adicionales: (787) 245-0502 · (939) 297-6146 · (787) 800-5222
 🕐 Horario: Lun–Vie 8:00 AM – 5:00 PM | Sáb 8:00 AM – 1:00 PM | Dom: Cerrado
@@ -165,20 +165,20 @@ Primero preguntar el pueblo. Luego informar:
 
 CARREROS DISPONIBLES POR ZONA:
 • *Yailo* (Martes y Viernes):
-    Isabela, Quebradillas, Camuy, Hatillo, Arecibo, Barceloneta, Manatí, Vega Baja
-    ℹ️ El carrero coordina hora y lugar contigo luego de las 11:00 AM
+  Isabela, Quebradillas, Camuy, Hatillo, Arecibo, Barceloneta, Manatí, Vega Baja
+  ℹ️ El carrero coordina hora y lugar contigo luego de las 11:00 AM
 • *Israel* (Lun–Vie | 11:00 AM – 4:00 PM):
-    Arecibo, Barceloneta, Manatí, Vega Baja, Vega Alta, Dorado, Toa Baja, Toa Alta, Bayamón, Guaynabo, Trujillo Alto, San Juan
+  Arecibo, Barceloneta, Manatí, Vega Baja, Vega Alta, Dorado, Toa Baja, Toa Alta, Bayamón, Guaynabo, Trujillo Alto, San Juan
 • *Angélica* (Martes y Viernes):
-    Carolina – Plaza Carolina Colobos (5:30 PM)
-    Canóvanas – Outlets de Canóvanas (5:00 PM)
-    Caguas (Jueves) – Las Catalinas Mall (5:30 PM)
-    San Juan (después de 5:00 PM)
+  Carolina – Plaza Carolina Colobos (5:30 PM)
+  Canóvanas – Outlets de Canóvanas (5:00 PM)
+  Caguas (Jueves) – Las Catalinas Mall (5:30 PM)
+  San Juan (después de 5:00 PM)
 • *Nereida Torres* — Martes 2–6 PM:
-    Yauco (Yauco Plaza McDonald's), Peñuelas (Agro Peñuelas), Juana Díaz (Mall), Ponce, Villalba
-    Jueves 2–6 PM: Villalba, Juana Díaz, Santa Isabel (Burger King), Coamo (Mall), Salinas (Burger King), Guayama (Wingstop), Guayanilla (Frappe Rumba)
+  Yauco (Yauco Plaza McDonald's), Peñuelas (Agro Peñuelas), Juana Díaz (Mall), Ponce, Villalba
+  Jueves 2–6 PM: Villalba, Juana Díaz, Santa Isabel (Burger King), Coamo (Mall), Salinas (Burger King), Guayama (Wingstop), Guayanilla (Frappe Rumba)
 • *Karina o Suheily* (Lun–Vie | después de 4:00 PM):
-    Lares — Karina 787-669-9414
+  Lares — Karina 787-669-9414
 
 Datos a recolectar: Nombre · Teléfono · Pueblo · Producto y cantidad · Monto a pagar
 
@@ -278,6 +278,8 @@ REGLAS OPERATIVAS
 ✅ Para cliente nuevo: siempre evalúa primero (4 preguntas).
 ✅ Para recompra: evalúa continuidad (5 preguntas) antes de recomendar dosis.
 ✅ Para pedido directo: flujo ultra rápido, sin preguntas innecesarias.
+🚨 CRÍTICO: Cuando el cliente diga 'quiero hablar con un agente/asesor', 'conéctame con alguien', 'hablar con una persona', 'necesito ayuda de un humano', o cualquier variación → DEBES invocar INMEDIATAMENTE la función escalate_to_agent. NO respondas con texto. LLAMA LA FUNCIÓN.
+🚨 CRÍTICO: Cuando el cliente escriba 'agente', 'asesor', 'persona', 'humano' → LLAMA escalate_to_agent SIN EXCEPCIÓN.
 ❌ NUNCA des diagnósticos médicos.
 ❌ NUNCA inventes precios fuera del catálogo.
 ❌ NUNCA confirmes citas en Vagaro directamente.
@@ -521,6 +523,24 @@ class GeminiService:
 
         if media_id:
             user_message = f"{user_message}\n[El cliente envió un archivo/imagen con ID: {media_id}]"
+
+        # ── Detección directa de intención de escalada ──────────────────────────
+        escalation_keywords = [
+            "agente", "asesor", "asesora", "persona", "humano", "humana",
+            "hablar con", "conectar con", "quiero ayuda", "necesito ayuda",
+            "agent", "human", "person", "talk to", "speak with",
+            "queja", "reclamo", "problema con", "no funciona", "error en",
+        ]
+        msg_lower = user_message.lower()
+        if any(kw in msg_lower for kw in escalation_keywords):
+            # Verificar que no sea una pregunta sobre el agente (ej: "¿hay agentes disponibles?")
+            non_escalation = ["precio", "costo", "cuánto", "disponible", "horario", "cuanto"]
+            if not any(kw in msg_lower for kw in non_escalation):
+                return {
+                    "text": None,
+                    "function_call": "escalate_to_agent",
+                    "function_args": {"reason": f"Cliente solicitó: {user_message[:100]}"},
+                }
 
         try:
             model = self._get_model(system_prompt)

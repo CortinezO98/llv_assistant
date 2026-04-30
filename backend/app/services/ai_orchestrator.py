@@ -280,7 +280,8 @@ class AIOrchestrator:
         patient.is_recurrent = 1
         self.db.flush()
 
-        self.analytics.track("delivery_created", session_id=session.id, patient_id=patient.id, service=service, town=delivery_town)
+        self.analytics.track("delivery_created", session_id=session.id, patient_id=patient.id,
+                             service=service, town=delivery_town)
 
         reply = (
             f"✅ ¡Registré tu pedido de entrega!\n\n"
@@ -339,7 +340,8 @@ class AIOrchestrator:
         patient.is_recurrent = 1
         self.db.flush()
 
-        self.analytics.track("shipment_created", session_id=session.id, patient_id=patient.id, service=service, country=shipment.country)
+        self.analytics.track("shipment_created", session_id=session.id, patient_id=patient.id,
+                             service=service, country=shipment.country)
 
         reply = (
             f"✅ ¡Registré tu pedido de envío!\n\n"
@@ -385,7 +387,8 @@ class AIOrchestrator:
             "Te envío la guía completa del tratamiento 📩\n\n"
             "¿Te gustaría que te lo entreguemos o prefieres recogerlo en clínica? 🚚📍"
         )
-        self.analytics.track("patient_evaluated", session_id=session.id, patient_id=patient.id, product=product, dose=dose, type="new")
+        self.analytics.track("patient_evaluated", session_id=session.id, patient_id=patient.id,
+                             product=product, dose=dose, type="new")
         return OrchestratorResult(reply=reply, action_taken="evaluate_patient", success=True)
 
     # ── Acción: evaluar recompra ──────────────────────────────────────────────
@@ -548,11 +551,29 @@ class AIOrchestrator:
         ctx["agent_summary"]       = summary
         ctx["escalation_reason"]   = reason
         ctx["escalated_at"]        = datetime.utcnow().isoformat()
-        session.context_json = ctx
+        # Forzar update — SQLAlchemy no detecta mutaciones en JSON
+        import copy
+        from sqlalchemy.orm.attributes import flag_modified
+        session.context_json = copy.deepcopy(ctx)
+        flag_modified(session, "context_json")
         self.db.flush()
 
         # Analytics
         self.analytics.agent_handoff(session.id, patient.id, agent.id, reason)
+
+        # Notificar al agente por email (en background, no bloquea)
+        try:
+            self.notifications.notify_agent_escalation(
+                agent_email   = agent.email,
+                agent_name    = agent.name,
+                patient_name  = patient.full_name or "Cliente",
+                patient_number = patient.whatsapp_number,
+                reason        = reason,
+                ai_summary    = ctx.get("agent_summary"),
+                session_id    = session.id,
+            )
+        except Exception as e:
+            logger.warning("No se pudo notificar al agente por email: %s", e)
 
         reply = (
             f"Perfecto, te conecto con uno de nuestros asesores. 👋\n\n"
