@@ -256,6 +256,32 @@ def close_conversation(
     analytics.session_completed(session_id, patient.id if patient else None)
 
     db.commit()
+
+    # ── Enviar encuesta de satisfacción al cliente ──────────────────────────
+    if patient and patient.whatsapp_number:
+        try:
+            survey_msg = (
+                "¡Gracias por contactarnos! 💙\n\n"
+                "Nos encantaría saber cómo fue tu experiencia con LLV Wellness Clinic.\n\n"
+                "Por favor califica nuestro servicio del *1 al 5*:\n"
+                "⭐ 1 - Muy malo\n"
+                "⭐⭐ 2 - Malo\n"
+                "⭐⭐⭐ 3 - Regular\n"
+                "⭐⭐⭐⭐ 4 - Bueno\n"
+                "⭐⭐⭐⭐⭐ 5 - Excelente\n\n"
+                "_Tu opinión nos ayuda a mejorar_ 🙏"
+            )
+            outbox = OutboxMessage(
+                whatsapp_number=patient.whatsapp_number,
+                payload_json={"type": "text", "text": {"body": survey_msg}},
+                status="pending",
+            )
+            db.add(outbox)
+            db.commit()
+            flush_outbox()
+        except Exception as e:
+            logger.warning("Error enviando encuesta: %s", e)
+
     logger.info("Conversación cerrada | session=%s | agent=%s", session_id, agent.name)
     return {"ok": True, "closed_by": agent.name}
 

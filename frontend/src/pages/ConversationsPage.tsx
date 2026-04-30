@@ -2,6 +2,23 @@ import { useEffect, useRef, useState, useCallback } from 'react'
 import { conversationsApi, agentsApi } from '../api/client'
 import { useAuth } from '../context/AuthContext'
 
+// ── Sonido de notificación (Web Audio API) ──────────────────────────────────
+function playNotificationSound() {
+    try {
+        const ctx = new (window.AudioContext || (window as any).webkitAudioContext)()
+        const oscillator = ctx.createOscillator()
+        const gainNode = ctx.createGain()
+        oscillator.connect(gainNode)
+        gainNode.connect(ctx.destination)
+        oscillator.frequency.setValueAtTime(880, ctx.currentTime)
+        oscillator.frequency.setValueAtTime(660, ctx.currentTime + 0.1)
+        gainNode.gain.setValueAtTime(0.3, ctx.currentTime)
+        gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4)
+        oscillator.start(ctx.currentTime)
+        oscillator.stop(ctx.currentTime + 0.4)
+    } catch (e) { /* silencioso si el browser no soporta */ }
+}
+
 interface Message {
     id: number
     direction: 'inbound' | 'outbound'
@@ -72,11 +89,33 @@ export default function ConversationsPage() {
     const [showTransfer, setShowTransfer]   = useState(false)
     const messagesEndRef = useRef<HTMLDivElement>(null)
 
+    // ── Notificación de mensaje nuevo ──────────────────────────────────────
+    const lastMessageCount = useRef<Record<number, number>>({})
+    const [newMessageAlert, setNewMessageAlert] = useState<string | null>(null)
+
+    const checkNewMessages = useCallback((convList: any[]) => {
+        convList.forEach(conv => {
+            if (conv.status === 'in_agent') {
+                const prev = lastMessageCount.current[conv.session_id] ?? -1
+                const msgTime = conv.last_message_at ? new Date(conv.last_message_at).getTime() : 0
+                if (prev > 0 && msgTime > prev) {
+                    playNotificationSound()
+                    setNewMessageAlert(`Nuevo mensaje de ${conv.patient?.name || conv.patient?.whatsapp_number}`)
+                    setTimeout(() => setNewMessageAlert(null), 4000)
+                }
+                lastMessageCount.current[conv.session_id] = msgTime
+            }
+        })
+    }, [])
+
     const loadConversations = useCallback(() => {
         conversationsApi.list(filter || undefined)
-        .then(r => setConversations(r.data))
+        .then(r => {
+            checkNewMessages(r.data)
+            setConversations(r.data)
+        })
         .catch(() => {})
-    }, [filter])
+    }, [filter, checkNewMessages])
 
     useEffect(() => {
         loadConversations()
@@ -169,6 +208,20 @@ export default function ConversationsPage() {
     )
 
     return (
+        <div className="flex h-full" style={{position: 'relative'}}>
+        {/* Toast de mensaje nuevo */}
+        {newMessageAlert && (
+            <div style={{
+                position: 'fixed', top: '20px', right: '20px', zIndex: 9999,
+                background: '#0b4c45', color: 'white', padding: '12px 20px',
+                borderRadius: '10px', boxShadow: '0 4px 16px rgba(0,0,0,0.2)',
+                display: 'flex', alignItems: 'center', gap: '10px',
+                fontSize: '14px', fontWeight: 500, animation: 'slideIn 0.3s ease'
+            }}>
+                <span style={{fontSize: '20px'}}>💬</span>
+                <span>{newMessageAlert}</span>
+            </div>
+        )}
         <div className="flex h-full">
         {/* ── Sidebar: lista de conversaciones ─────────────────────────────── */}
         <div className="w-80 flex-shrink-0 border-r border-[#e4ede8] bg-white flex flex-col">
