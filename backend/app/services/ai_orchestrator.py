@@ -198,6 +198,8 @@ class AIOrchestrator:
 
         actions = {
             "identify_patient":       self._action_identify_patient,
+            "evaluate_patient":       self._action_evaluate_patient,
+            "evaluate_reorder":       self._action_evaluate_reorder,
             "schedule_appointment":   self._action_schedule_appointment,
             "register_delivery":      self._action_register_delivery,
             "register_shipment":      self._action_register_shipment,
@@ -351,6 +353,82 @@ class AIOrchestrator:
             f"¿Deseas proceder con el pago ahora?"
         )
         return OrchestratorResult(reply=reply, action_taken="shipment_created", success=True)
+
+    # ── Acción: evaluar cliente nuevo ────────────────────────────────────────
+    def _action_evaluate_patient(self, args: dict, patient: Patient, session: Session) -> OrchestratorResult:
+        import json as _json
+        ctx = session.context_json or {}
+        if isinstance(ctx, str):
+            try: ctx = _json.loads(ctx)
+            except: ctx = {}
+        ctx["evaluation"] = {
+            "type": "new_patient",
+            "used_glp1_before": args.get("used_glp1_before"),
+            "current_weight_lbs": args.get("current_weight_lbs"),
+            "weight_loss_goal_lbs": args.get("weight_loss_goal_lbs"),
+            "medical_conditions": args.get("medical_conditions", "ninguna"),
+            "recommended_product": args.get("recommended_product", "semaglutide"),
+            "recommended_dose": args.get("recommended_dose", "0.25 MG"),
+        }
+        session.context_json = ctx
+        self.db.flush()
+
+        product = args.get("recommended_product", "semaglutide").capitalize()
+        dose    = args.get("recommended_dose", "0.25 MG")
+
+        reply = (
+            "Perfecto, gracias por la info 😊\n\n"
+            f"En tu caso, lo más recomendable es iniciar con *{product}* en dosis *{dose}*, "
+            "para que tu cuerpo se adapte de forma segura.\n"
+            "✨ Controla el apetito y acelera la pérdida de peso de forma progresiva.\n\n"
+            "Efectos posibles: náuseas, dolor de cabeza o acidez (temporales y manejables).\n"
+            "Te envío la guía completa del tratamiento 📩\n\n"
+            "¿Te gustaría que te lo entreguemos o prefieres recogerlo en clínica? 🚚📍"
+        )
+        self.analytics.track("patient_evaluated", session_id=session.id, patient_id=patient.id, product=product, dose=dose, type="new")
+        return OrchestratorResult(reply=reply, action_taken="evaluate_patient", success=True)
+
+    # ── Acción: evaluar recompra ──────────────────────────────────────────────
+    def _action_evaluate_reorder(self, args: dict, patient: Patient, session: Session) -> OrchestratorResult:
+        import json as _json
+        ctx = session.context_json or {}
+        if isinstance(ctx, str):
+            try: ctx = _json.loads(ctx)
+            except: ctx = {}
+        ctx["evaluation"] = {
+            "type": "reorder",
+            "current_product": args.get("current_product"),
+            "current_dose": args.get("current_dose"),
+            "dose_adjustment": args.get("dose_adjustment"),
+            "new_recommended_dose": args.get("new_recommended_dose"),
+            "side_effects": args.get("side_effects", "ninguno"),
+        }
+        session.context_json = ctx
+        self.db.flush()
+
+        product   = args.get("current_product", "").capitalize()
+        new_dose  = args.get("new_recommended_dose", "")
+        adj       = args.get("dose_adjustment", "mantener")
+
+        if adj == "subir":
+            adj_text = (f"Como no has tenido efectos secundarios y quieres seguir bajando, "
+                        f"lo ideal es *subir la dosis* 📈\n"
+                        f"Te recomiendo continuar con *{product}* en dosis *{new_dose}* 💉✨")
+        elif adj == "bajar":
+            adj_text = (f"Gracias por contarme 😊. Lo mejor es *ajustar la dosis* "
+                        f"para que te sientas mejor 💉✨\n"
+                        f"Te recomiendo continuar con *{product}* en dosis *{new_dose}*")
+        elif adj == "mantenimiento":
+            adj_text = ("¡Qué bueno leer eso! 😍 Si ya llegaste a tu peso ideal, "
+                        "pasamos a *fase de mantenimiento* ✨\n"
+                        "Espaciamos la aplicación (cada 15 días o según evolución) 💉")
+        else:
+            adj_text = "Súper 😊 vas muy bien. Lo ideal es *mantener la misma dosis* por ahora 👍✨"
+
+        reply = adj_text + "\n\n¿Te gustaría que te lo entreguemos o prefieres recogerlo en clínica? 🚚📍"
+        self.analytics.track("patient_evaluated", session_id=session.id, patient_id=patient.id,
+                             product=product, dose=new_dose, type="reorder", adjustment=adj)
+        return OrchestratorResult(reply=reply, action_taken="evaluate_reorder", success=True)
 
     # ── Acción: agendar cita ─────────────────────────────────────────────────
     def _action_schedule_appointment(self, args: dict, patient: Patient, session: Session) -> OrchestratorResult:

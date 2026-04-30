@@ -14,20 +14,32 @@ class Settings(BaseSettings):
     app_env: str = "development"
     app_debug: bool = True
     secret_key: str = "dev-secret-key-change-in-production"
-    allowed_origins: list[str] = ["http://localhost:5173", "http://localhost:3000"]
+    allowed_origins: Any = None
 
     @field_validator("allowed_origins", mode="before")
     @classmethod
     def parse_origins(cls, v: Any) -> list[str]:
-        """Acepta JSON array o cadena separada por comas."""
+        defaults = [
+            "http://localhost:5173",
+            "http://localhost:5175",
+            "http://localhost:3000",
+        ]
+        if v is None or v == "":
+            return defaults
         if isinstance(v, list):
-            return v
+            return [o.strip() for o in v if o.strip()] or defaults
         if isinstance(v, str):
             v = v.strip()
+            if not v:
+                return defaults
             if v.startswith("["):
-                return json.loads(v)
-            return [o.strip() for o in v.split(",") if o.strip()]
-        return v
+                try:
+                    result = json.loads(v)
+                    return result if result else defaults
+                except Exception:
+                    pass
+            return [o.strip() for o in v.split(",") if o.strip()] or defaults
+        return defaults
 
     # Base de datos
     db_host: str = "127.0.0.1"
