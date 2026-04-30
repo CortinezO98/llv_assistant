@@ -1,22 +1,25 @@
-import { useEffect, useRef, useState, useCallback } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { conversationsApi, agentsApi } from '../api/client'
 import { useAuth } from '../context/AuthContext'
 
-// ── Sonido de notificación (Web Audio API) ──────────────────────────────────
 function playNotificationSound() {
     try {
         const ctx = new (window.AudioContext || (window as any).webkitAudioContext)()
         const oscillator = ctx.createOscillator()
         const gainNode = ctx.createGain()
+
         oscillator.connect(gainNode)
         gainNode.connect(ctx.destination)
+
         oscillator.frequency.setValueAtTime(880, ctx.currentTime)
         oscillator.frequency.setValueAtTime(660, ctx.currentTime + 0.1)
+
         gainNode.gain.setValueAtTime(0.3, ctx.currentTime)
         gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4)
+
         oscillator.start(ctx.currentTime)
         oscillator.stop(ctx.currentTime + 0.4)
-    } catch (e) { /* silencioso si el browser no soporta */ }
+    } catch {}
 }
 
 interface Message {
@@ -44,6 +47,9 @@ interface Conversation {
     assigned_agent: { id: number; name: string } | null
     last_message: string | null
     last_message_at: string | null
+    last_message_id?: number | null
+    last_message_direction?: 'inbound' | 'outbound' | null
+    last_message_sent_by_bot?: boolean | null
     ai_summary: string | null
     escalation_reason: string | null
     created_at: string
@@ -61,16 +67,23 @@ interface ConversationDetail {
 }
 
 const statusColors: Record<string, string> = {
-    active:     'bg-brand-100 text-brand-700',
-    in_agent:   'bg-blue-100 text-blue-700',
-    completed:  'bg-teal-100 text-teal-700',
-    closed:     'bg-gray-100 text-gray-500',
+    active: 'bg-brand-100 text-brand-700',
+    in_agent: 'bg-blue-100 text-blue-700',
+    completed: 'bg-teal-100 text-teal-700',
+    closed: 'bg-gray-100 text-gray-500',
 }
+
 const statusLabels: Record<string, string> = {
-    active: 'Bot activo', in_agent: 'Con agente', completed: 'Completada', closed: 'Cerrada'
+    active: 'Bot activo',
+    in_agent: 'Con agente',
+    completed: 'Completada',
+    closed: 'Cerrada',
 }
+
 const locationFlag: Record<string, string> = {
-    puerto_rico: '🇵🇷', latam: '🌎', usa: '🇺🇸'
+    puerto_rico: '🇵🇷',
+    latam: '🌎',
+    usa: '🇺🇸',
 }
 
 export default function ConversationsPage() {
@@ -78,65 +91,183 @@ export default function ConversationsPage() {
     const isAdmin = agent?.role === 'admin' || agent?.role === 'supervisor'
 
     const [conversations, setConversations] = useState<Conversation[]>([])
-    const [selected, setSelected]           = useState<ConversationDetail | null>(null)
-    const [selectedId, setSelectedId]       = useState<number | null>(null)
-    const [filter, setFilter]               = useState('')
-    const [search, setSearch]               = useState('')
-    const [message, setMessage]             = useState('')
-    const [sending, setSending]             = useState(false)
+    const [selected, setSelected] = useState<ConversationDetail | null>(null)
+    const [selectedId, setSelectedId] = useState<number | null>(null)
+    const [filter, setFilter] = useState('')
+    const [search, setSearch] = useState('')
+    const [message, setMessage] = useState('')
+    const [sending, setSending] = useState(false)
     const [loadingDetail, setLoadingDetail] = useState(false)
-    const [agents, setAgents]               = useState<any[]>([])
-    const [showTransfer, setShowTransfer]   = useState(false)
-    const messagesEndRef = useRef<HTMLDivElement>(null)
-
-    // ── Notificación de mensaje nuevo ──────────────────────────────────────
-    const lastMessageCount = useRef<Record<number, number>>({})
+    const [agents, setAgents] = useState<any[]>([])
+    const [showTransfer, setShowTransfer] = useState(false)
     const [newMessageAlert, setNewMessageAlert] = useState<string | null>(null)
+    const [wsStatus, setWsStatus] = useState<'connecting' | 'connected' | 'disconnected'>('connecting')
 
-    const checkNewMessages = useCallback((convList: any[]) => {
-        convList.forEach(conv => {
-            if (conv.status === 'in_agent') {
-                const prev = lastMessageCount.current[conv.session_id] ?? -1
-                const msgTime = conv.last_message_at ? new Date(conv.last_message_at).getTime() : 0
-                if (prev > 0 && msgTime > prev) {
-                    playNotificationSound()
-                    setNewMessageAlert(`Nuevo mensaje de ${conv.patient?.name || conv.patient?.whatsapp_number}`)
-                    setTimeout(() => setNewMessageAlert(null), 4000)
-                }
-                lastMessageCount.current[conv.session_id] = msgTime
-            }
-        })
-    }, [])
-
-    const loadConversations = useCallback(() => {
-        conversationsApi.list(filter || undefined)
-        .then(r => {
-            checkNewMessages(r.data)
-            setConversations(r.data)
-        })
-        .catch(() => {})
-    }, [filter, checkNewMessages])
+    const messagesEndRef = useRef<HTMLDivElement>(null)
+    const socketRef = useRef<WebSocket | null>(null)
+    const reconnectTimeoutRef = useRef<number | null>(null)
+    const reconnectAttemptRef = useRef(0)
+    const selectedIdRef = useRef<number | null>(null)
 
     useEffect(() => {
+        selectedIdRef.current = selectedId
+    }, [selectedId])
+
+    const loadConversations = useCallback(() => {
+        conversationsApi
+            .list(filter || undefined)
+            .then(r => setConversations(r.data))
+            .catch(() => {})
+    }, [filter])
+
+    // ✅ Carga inicial solamente. No hay polling.
+    useEffect(() => {
         loadConversations()
-        const interval = setInterval(loadConversations, 5000) // refresh cada 5s
-        return () => clearInterval(interval)
+    }, [loadConversations])
+
+    // 🔥 WebSocket realtime con reconexión automática
+    useEffect(() => {
+        let manuallyClosed = false
+
+        const connectWebSocket = () => {
+            const token = localStorage.getItem('llv_token')
+            if (!token) return
+
+            setWsStatus('connecting')
+
+            const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8001'
+            const wsUrl = apiUrl
+                .replace('http://', 'ws://')
+                .replace('https://', 'wss://')
+
+            const socket = new WebSocket(`${wsUrl}/ws/realtime?token=${token}`)
+            socketRef.current = socket
+
+            socket.onopen = () => {
+                console.log('⚡ WebSocket realtime conectado')
+                reconnectAttemptRef.current = 0
+                setWsStatus('connected')
+            }
+
+            socket.onmessage = event => {
+                try {
+                    const data = JSON.parse(event.data)
+
+                    if (data.type !== 'new_message') return
+                    if (data.direction !== 'inbound') return
+
+                    playNotificationSound()
+
+                    setNewMessageAlert(
+                        `Nuevo mensaje de ${data.customer_name || data.whatsapp_number || 'Cliente'}`
+                    )
+
+                    setTimeout(() => {
+                        setNewMessageAlert(null)
+                    }, 4000)
+
+                    // Actualiza la lista local sin consultar API
+                    setConversations(prev => {
+                        const exists = prev.some(conv => conv.session_id === data.session_id)
+
+                        if (!exists) {
+                            loadConversations()
+                            return prev
+                        }
+
+                        return prev.map(conv =>
+                            conv.session_id === data.session_id
+                                    ? {
+                                        ...conv,
+                                        last_message: data.content,
+                                        last_message_at: data.created_at,
+                                        last_message_direction: data.direction,
+                                        updated_at: data.created_at,
+                                    }
+                                : conv
+                        )
+                    })
+
+                    // Actualiza el chat abierto sin consultar API
+                    setSelected(prev => {
+                        if (!prev || prev.session_id !== data.session_id) return prev
+
+                        return {
+                            ...prev,
+                            messages: [
+                                ...prev.messages,
+                                {
+                                    id: data.message_id || Date.now(),
+                                    direction: data.direction,
+                                    content: data.content,
+                                    sent_by_bot: false,
+                                    agent_id: null,
+                                    created_at: data.created_at,
+                                },
+                            ],
+                        }
+                    })
+                } catch (error) {
+                    console.warn('Error procesando evento realtime', error)
+                }
+            }
+
+            socket.onerror = () => {
+                console.warn('WebSocket realtime error')
+            }
+
+            socket.onclose = () => {
+                console.warn('WebSocket realtime cerrado')
+                setWsStatus('disconnected')
+
+                if (manuallyClosed) return
+
+                reconnectAttemptRef.current += 1
+
+                const delay = Math.min(
+                    1000 * Math.pow(2, reconnectAttemptRef.current),
+                    15000
+                )
+
+                reconnectTimeoutRef.current = window.setTimeout(() => {
+                    connectWebSocket()
+                }, delay)
+            }
+        }
+
+        connectWebSocket()
+
+        return () => {
+            manuallyClosed = true
+
+            if (reconnectTimeoutRef.current) {
+                window.clearTimeout(reconnectTimeoutRef.current)
+            }
+
+            if (socketRef.current) {
+                socketRef.current.close()
+            }
+        }
     }, [loadConversations])
 
     useEffect(() => {
         if (isAdmin) {
-        agentsApi.list().then(r => setAgents(r.data.filter((a: any) => a.is_active)))
+            agentsApi
+                .list()
+                .then(r => setAgents(r.data.filter((a: any) => a.is_active)))
+                .catch(() => {})
         }
     }, [isAdmin])
 
     const openConversation = async (conv: Conversation) => {
         setSelectedId(conv.session_id)
         setLoadingDetail(true)
+
         try {
-        const r = await conversationsApi.getMessages(conv.session_id)
-        setSelected(r.data)
+            const r = await conversationsApi.getMessages(conv.session_id)
+            setSelected(r.data)
         } finally {
-        setLoadingDetail(false)
+            setLoadingDetail(false)
         }
     }
 
@@ -144,54 +275,85 @@ export default function ConversationsPage() {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
     }, [selected?.messages])
 
-    // Auto-refresh del detalle cada 3s si hay una conversación abierta
-    useEffect(() => {
-        if (!selectedId) return
-        const interval = setInterval(async () => {
-        try {
-            const r = await conversationsApi.getMessages(selectedId)
-            setSelected(r.data)
-        } catch {}
-        }, 3000)
-        return () => clearInterval(interval)
-    }, [selectedId])
-
     const handleSend = async () => {
         if (!message.trim() || !selectedId) return
+
         setSending(true)
-        try {
-        await conversationsApi.send(selectedId, message)
+
+        const textToSend = message.trim()
         setMessage('')
-        const r = await conversationsApi.getMessages(selectedId)
-        setSelected(r.data)
-        loadConversations()
+
+        try {
+            await conversationsApi.send(selectedId, textToSend)
+
+            setSelected(prev => {
+                if (!prev || prev.session_id !== selectedId) return prev
+
+                return {
+                    ...prev,
+                    messages: [
+                        ...prev.messages,
+                        {
+                            id: Date.now(),
+                            direction: 'outbound',
+                            content: textToSend,
+                            sent_by_bot: false,
+                            agent_id: agent?.agent_id || null,
+                            created_at: new Date().toISOString(),
+                        },
+                    ],
+                }
+            })
+
+            setConversations(prev =>
+                prev.map(conv =>
+                    conv.session_id === selectedId
+                            ? {
+                                ...conv,
+                                last_message: textToSend,
+                                last_message_at: new Date().toISOString(),
+                                last_message_direction: 'outbound',
+                            }
+                        : conv
+                )
+            )
         } finally {
-        setSending(false)
+            setSending(false)
         }
     }
 
     const handleTake = async () => {
         if (!selectedId) return
+
         await conversationsApi.take(selectedId)
+
         const r = await conversationsApi.getMessages(selectedId)
         setSelected(r.data)
+
         loadConversations()
     }
 
     const handleClose = async () => {
         if (!selectedId || !confirm('¿Cerrar esta conversación?')) return
+
         await conversationsApi.close(selectedId)
+
         setSelected(null)
         setSelectedId(null)
+
         loadConversations()
     }
 
     const handleTransfer = async (agentId: number) => {
         if (!selectedId) return
+
         await conversationsApi.transfer(selectedId, agentId)
+
         setShowTransfer(false)
+
         const r = await conversationsApi.getMessages(selectedId)
         setSelected(r.data)
+
         loadConversations()
     }
 
@@ -208,249 +370,352 @@ export default function ConversationsPage() {
     )
 
     return (
-        <div className="flex h-full" style={{position: 'relative'}}>
-        {/* Toast de mensaje nuevo */}
-        {newMessageAlert && (
-            <div style={{
-                position: 'fixed', top: '20px', right: '20px', zIndex: 9999,
-                background: '#0b4c45', color: 'white', padding: '12px 20px',
-                borderRadius: '10px', boxShadow: '0 4px 16px rgba(0,0,0,0.2)',
-                display: 'flex', alignItems: 'center', gap: '10px',
-                fontSize: '14px', fontWeight: 500, animation: 'slideIn 0.3s ease'
-            }}>
-                <span style={{fontSize: '20px'}}>💬</span>
-                <span>{newMessageAlert}</span>
-            </div>
-        )}
-        <div className="flex h-full">
-        {/* ── Sidebar: lista de conversaciones ─────────────────────────────── */}
-        <div className="w-80 flex-shrink-0 border-r border-[#e4ede8] bg-white flex flex-col">
-            {/* Header */}
-            <div className="px-4 py-4 border-b border-[#e4ede8]">
-            <div className="flex items-center justify-between mb-3">
-                <h2 className="font-display font-bold text-brand-800">Conversaciones</h2>
-                <span className="badge bg-brand-100 text-brand-700">{filtered.length}</span>
-            </div>
-            <input
-                className="input text-sm"
-                placeholder="🔍 Buscar paciente..."
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-            />
-            {/* Filtros de estado */}
-            <div className="flex gap-1 mt-2 flex-wrap">
-                {['', 'active', 'in_agent', 'completed'].map(s => (
-                <button key={s} onClick={() => setFilter(s)}
-                    className={`px-2 py-1 rounded-lg text-[10px] font-semibold transition-all ${filter === s ? 'bg-brand-600 text-white' : 'bg-gray-100 text-gray-500 hover:bg-brand-50'}`}>
-                    {s === '' ? 'Todas' : statusLabels[s]}
-                </button>
-                ))}
-            </div>
-            </div>
-
-            {/* Lista */}
-            <div className="flex-1 overflow-y-auto">
-            {filtered.length === 0 ? (
-                <div className="p-6 text-center text-sm text-[#6b8a78]">
-                Sin conversaciones{filter ? ` con estado "${statusLabels[filter]}"` : ''}
-                </div>
-            ) : filtered.map(conv => (
+        <div className="flex h-full" style={{ position: 'relative' }}>
+            {newMessageAlert && (
                 <div
-                key={conv.session_id}
-                onClick={() => openConversation(conv)}
-                className={`px-4 py-3.5 border-b border-[#e4ede8] cursor-pointer transition-colors hover:bg-brand-50/50 ${selectedId === conv.session_id ? 'bg-brand-50 border-l-2 border-l-brand-600' : ''}`}
+                    style={{
+                        position: 'fixed',
+                        top: '20px',
+                        right: '20px',
+                        zIndex: 9999,
+                        background: '#0b4c45',
+                        color: 'white',
+                        padding: '12px 20px',
+                        borderRadius: '10px',
+                        boxShadow: '0 4px 16px rgba(0,0,0,0.2)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '10px',
+                        fontSize: '14px',
+                        fontWeight: 500,
+                    }}
                 >
-                <div className="flex items-start justify-between gap-2 mb-1">
-                    <div className="flex items-center gap-2 min-w-0">
-                    <div className="w-8 h-8 bg-brand-100 rounded-full flex items-center justify-center text-brand-600 text-xs font-bold flex-shrink-0">
-                        {conv.patient.name.charAt(0)}
-                    </div>
-                    <div className="min-w-0">
-                        <div className="text-xs font-semibold text-brand-800 truncate flex items-center gap-1">
-                        {locationFlag[conv.patient.location_type] || '🌎'} {conv.patient.name}
-                        {conv.patient.is_recurrent && <span className="text-amber-500 text-[10px]">⭐</span>}
+                    <span style={{ fontSize: '20px' }}>💬</span>
+                    <span>{newMessageAlert}</span>
+                </div>
+            )}
+
+            <div className="flex h-full w-full">
+                <div className="w-80 flex-shrink-0 border-r border-[#e4ede8] bg-white flex flex-col">
+                    <div className="px-4 py-4 border-b border-[#e4ede8]">
+                        <div className="flex items-center justify-between mb-3">
+                            <div>
+                                <h2 className="font-display font-bold text-brand-800">
+                                    Conversaciones
+                                </h2>
+
+                                <div className="text-[10px] mt-1">
+                                    {wsStatus === 'connected' && (
+                                        <span className="text-green-600">● Tiempo real activo</span>
+                                    )}
+                                    {wsStatus === 'connecting' && (
+                                        <span className="text-amber-600">● Conectando realtime...</span>
+                                    )}
+                                    {wsStatus === 'disconnected' && (
+                                        <span className="text-red-500">● Reconectando realtime...</span>
+                                    )}
+                                </div>
+                            </div>
+
+                            <span className="badge bg-brand-100 text-brand-700">
+                                {filtered.length}
+                            </span>
                         </div>
-                        <div className="text-[10px] text-[#6b8a78] font-mono">{conv.patient.whatsapp_number}</div>
-                    </div>
-                    </div>
-                    <span className={`badge text-[9px] flex-shrink-0 ${statusColors[conv.status]}`}>
-                    {statusLabels[conv.status]}
-                    </span>
-                </div>
-                {conv.last_message && (
-                    <p className="text-[11px] text-[#6b8a78] truncate ml-10">{conv.last_message}</p>
-                )}
-                {conv.assigned_agent && (
-                    <p className="text-[10px] text-blue-500 ml-10 mt-0.5">→ {conv.assigned_agent.name}</p>
-                )}
-                </div>
-            ))}
-            </div>
-        </div>
 
-        {/* ── Panel principal: chat ─────────────────────────────────────────── */}
-        <div className="flex-1 flex flex-col bg-[#f8faf9]">
-            {!selected ? (
-            <div className="flex-1 flex flex-col items-center justify-center text-center p-8">
-                <div className="text-5xl mb-4">💬</div>
-                <h3 className="font-display font-bold text-brand-800 text-xl mb-2">Panel de conversaciones</h3>
-                <p className="text-sm text-[#6b8a78] max-w-xs">
-                {isAdmin
-                    ? 'Selecciona una conversación de la lista para ver el historial y responder.'
-                    : 'Selecciona una conversación asignada a ti para responder al cliente.'}
-                </p>
-            </div>
-            ) : loadingDetail ? (
-            <div className="flex-1 flex items-center justify-center">
-                <svg className="animate-spin w-8 h-8 text-brand-500" viewBox="0 0 24 24" fill="none">
-                <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeOpacity=".2"/>
-                <path d="M12 2a10 10 0 0 1 10 10" stroke="currentColor" strokeWidth="3" strokeLinecap="round"/>
-                </svg>
-            </div>
-            ) : (
-            <>
-                {/* Header del chat */}
-                <div className="bg-white border-b border-[#e4ede8] px-5 py-3.5 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 bg-brand-100 rounded-full flex items-center justify-center text-brand-600 font-bold">
-                    {selected.patient.name.charAt(0)}
-                    </div>
-                    <div>
-                    <div className="font-semibold text-brand-800 text-sm flex items-center gap-2">
-                        {locationFlag[selected.patient.location_type]} {selected.patient.name}
-                        {selected.patient.is_recurrent && <span className="badge bg-amber-100 text-amber-700 text-[9px]">⭐ Recurrente</span>}
-                    </div>
-                    <div className="text-xs text-[#6b8a78] font-mono">{selected.patient.whatsapp_number}</div>
-                    </div>
-                </div>
+                        <input
+                            className="input text-sm"
+                            placeholder="🔍 Buscar paciente..."
+                            value={search}
+                            onChange={e => setSearch(e.target.value)}
+                        />
 
-                <div className="flex items-center gap-2">
-                    <span className={`badge ${statusColors[selected.status]}`}>{statusLabels[selected.status]}</span>
-
-                    {/* Tomar conversación */}
-                    {isAdmin && selected.status === 'active' && (
-                    <button onClick={handleTake} className="btn-primary py-1.5 px-3 text-xs">
-                        🎧 Tomar
-                    </button>
-                    )}
-
-                    {/* Transferir */}
-                    {isAdmin && selected.status === 'in_agent' && (
-                    <div className="relative">
-                        <button onClick={() => setShowTransfer(!showTransfer)} className="btn-ghost py-1.5 px-3 text-xs border border-[#e4ede8]">
-                        🔄 Transferir
-                        </button>
-                        {showTransfer && (
-                        <div className="absolute right-0 top-full mt-1 bg-white border border-[#e4ede8] rounded-xl shadow-lg z-10 w-48 py-1">
-                            {agents.filter(a => a.id !== agent?.agent_id).map((a: any) => (
-                            <button key={a.id} onClick={() => handleTransfer(a.id)}
-                                className="w-full text-left px-3 py-2 text-xs hover:bg-brand-50 text-brand-800">
-                                {a.name} <span className="text-[#6b8a78]">({a.current_load} activas)</span>
-                            </button>
+                        <div className="flex gap-1 mt-2 flex-wrap">
+                            {['', 'active', 'in_agent', 'completed'].map(s => (
+                                <button
+                                    key={s}
+                                    onClick={() => setFilter(s)}
+                                    className={`px-2 py-1 rounded-lg text-[10px] font-semibold transition-all ${
+                                        filter === s
+                                            ? 'bg-brand-600 text-white'
+                                            : 'bg-gray-100 text-gray-500 hover:bg-brand-50'
+                                    }`}
+                                >
+                                    {s === '' ? 'Todas' : statusLabels[s]}
+                                </button>
                             ))}
                         </div>
-                        )}
                     </div>
-                    )}
 
-                    {/* Cerrar */}
-                    {selected.status !== 'completed' && selected.status !== 'closed' && (
-                    <button onClick={handleClose} className="btn-ghost py-1.5 px-3 text-xs border border-red-200 text-red-500 hover:bg-red-50">
-                        ✓ Cerrar
-                    </button>
-                    )}
-                </div>
-                </div>
-
-                {/* Resumen IA */}
-                {selected.ai_summary && (
-                <div className="mx-4 mt-3 p-3 bg-blue-50 border border-blue-200 rounded-xl">
-                    <div className="text-xs font-semibold text-blue-700 mb-1">🤖 Resumen IA de la conversación</div>
-                    <p className="text-xs text-blue-800 whitespace-pre-line">{selected.ai_summary}</p>
-                    {selected.escalation_reason && (
-                    <div className="mt-1.5 text-[10px] text-blue-600">
-                        <strong>Motivo escalada:</strong> {selected.escalation_reason}
-                    </div>
-                    )}
-                </div>
-                )}
-
-                {/* Mensajes */}
-                <div className="flex-1 overflow-y-auto px-4 py-4 space-y-2">
-                {selected.messages.map(msg => (
-                    <div key={msg.id} className={`flex ${msg.direction === 'outbound' ? 'justify-end' : 'justify-start'}`}>
-                    <div className={`max-w-[75%] rounded-2xl px-3.5 py-2.5 text-sm ${
-                        msg.direction === 'outbound'
-                        ? msg.sent_by_bot
-                            ? 'bg-brand-600 text-white rounded-br-sm'
-                            : 'bg-blue-600 text-white rounded-br-sm'
-                        : 'bg-white text-brand-900 border border-[#e4ede8] rounded-bl-sm shadow-sm'
-                    }`}>
-                        {msg.direction === 'outbound' && (
-                        <div className="text-[9px] opacity-70 mb-0.5">
-                            {msg.sent_by_bot ? '🤖 Bot' : '👤 Agente'}
-                        </div>
-                        )}
-                        <p className="whitespace-pre-wrap leading-relaxed">{msg.content}</p>
-                        <div className={`text-[9px] mt-1 opacity-60 text-right`}>
-                        {new Date(msg.created_at).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })}
-                        </div>
-                    </div>
-                    </div>
-                ))}
-                {selected.messages.length === 0 && (
-                    <div className="text-center py-8 text-sm text-[#6b8a78]">Sin mensajes aún</div>
-                )}
-                <div ref={messagesEndRef} />
-                </div>
-
-                {/* Campo de respuesta */}
-                {canRespond && selected.status !== 'completed' && selected.status !== 'closed' ? (
-                <div className="bg-white border-t border-[#e4ede8] px-4 py-3">
-                    <div className="flex gap-2 items-end">
-                    <textarea
-                        className="input flex-1 resize-none min-h-[44px] max-h-32 text-sm"
-                        placeholder="Escribe tu respuesta al cliente..."
-                        value={message}
-                        onChange={e => setMessage(e.target.value)}
-                        onKeyDown={e => {
-                        if (e.key === 'Enter' && !e.shiftKey) {
-                            e.preventDefault()
-                            handleSend()
-                        }
-                        }}
-                        rows={1}
-                    />
-                    <button
-                        onClick={handleSend}
-                        disabled={sending || !message.trim()}
-                        className="btn-primary px-4 py-2.5 flex-shrink-0 disabled:opacity-40"
-                    >
-                        {sending ? (
-                        <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
-                            <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeOpacity=".3"/>
-                            <path d="M12 2a10 10 0 0 1 10 10" stroke="currentColor" strokeWidth="3" strokeLinecap="round"/>
-                        </svg>
+                    <div className="flex-1 overflow-y-auto">
+                        {filtered.length === 0 ? (
+                            <div className="p-6 text-center text-sm text-[#6b8a78]">
+                                Sin conversaciones
+                            </div>
                         ) : (
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <line x1="22" y1="2" x2="11" y2="13"/>
-                            <polygon points="22,2 15,22 11,13 2,9"/>
-                        </svg>
+                            filtered.map(conv => (
+                                <div
+                                    key={conv.session_id}
+                                    onClick={() => openConversation(conv)}
+                                    className={`px-4 py-3.5 border-b border-[#e4ede8] cursor-pointer transition-colors hover:bg-brand-50/50 ${
+                                        selectedId === conv.session_id
+                                            ? 'bg-brand-50 border-l-2 border-l-brand-600'
+                                            : ''
+                                    }`}
+                                >
+                                    <div className="flex items-start justify-between gap-2 mb-1">
+                                        <div className="flex items-center gap-2 min-w-0">
+                                            <div className="w-8 h-8 bg-brand-100 rounded-full flex items-center justify-center text-brand-600 text-xs font-bold flex-shrink-0">
+                                                {conv.patient.name.charAt(0)}
+                                            </div>
+
+                                            <div className="min-w-0">
+                                                <div className="text-xs font-semibold text-brand-800 truncate flex items-center gap-1">
+                                                    {locationFlag[conv.patient.location_type] || '🌎'}{' '}
+                                                    {conv.patient.name}
+
+                                                    {conv.patient.is_recurrent && (
+                                                        <span className="text-amber-500 text-[10px]">
+                                                            ⭐
+                                                        </span>
+                                                    )}
+                                                </div>
+
+                                                <div className="text-[10px] text-[#6b8a78] font-mono">
+                                                    {conv.patient.whatsapp_number}
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <span className={`badge text-[9px] flex-shrink-0 ${statusColors[conv.status]}`}>
+                                            {statusLabels[conv.status]}
+                                        </span>
+                                    </div>
+
+                                    {conv.last_message && (
+                                        <p className="text-[11px] text-[#6b8a78] truncate ml-10">
+                                            {conv.last_message}
+                                        </p>
+                                    )}
+
+                                    {conv.assigned_agent && (
+                                        <p className="text-[10px] text-blue-500 ml-10 mt-0.5">
+                                            → {conv.assigned_agent.name}
+                                        </p>
+                                    )}
+                                </div>
+                            ))
                         )}
-                    </button>
                     </div>
-                    <p className="text-[10px] text-[#6b8a78] mt-1.5">Enter para enviar · Shift+Enter para nueva línea</p>
                 </div>
-                ) : (
-                <div className="bg-gray-50 border-t border-[#e4ede8] px-4 py-3 text-center text-xs text-[#6b8a78]">
-                    {selected.status === 'completed' || selected.status === 'closed'
-                    ? '✓ Conversación cerrada'
-                    : 'Toma la conversación para poder responder'}
+
+                <div className="flex-1 flex flex-col bg-[#f8faf9]">
+                    {!selected ? (
+                        <div className="flex-1 flex flex-col items-center justify-center text-center p-8">
+                            <div className="text-5xl mb-4">💬</div>
+
+                            <h3 className="font-display font-bold text-brand-800 text-xl mb-2">
+                                Panel de conversaciones
+                            </h3>
+
+                            <p className="text-sm text-[#6b8a78] max-w-xs">
+                                Selecciona una conversación de la lista para ver el historial y responder.
+                            </p>
+                        </div>
+                    ) : loadingDetail ? (
+                        <div className="flex-1 flex items-center justify-center">
+                            Cargando conversación...
+                        </div>
+                    ) : (
+                        <>
+                            <div className="bg-white border-b border-[#e4ede8] px-5 py-3.5 flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-9 h-9 bg-brand-100 rounded-full flex items-center justify-center text-brand-600 font-bold">
+                                        {selected.patient.name.charAt(0)}
+                                    </div>
+
+                                    <div>
+                                        <div className="font-semibold text-brand-800 text-sm flex items-center gap-2">
+                                            {locationFlag[selected.patient.location_type]}{' '}
+                                            {selected.patient.name}
+
+                                            {selected.patient.is_recurrent && (
+                                                <span className="badge bg-amber-100 text-amber-700 text-[9px]">
+                                                    ⭐ Recurrente
+                                                </span>
+                                            )}
+                                        </div>
+
+                                        <div className="text-xs text-[#6b8a78] font-mono">
+                                            {selected.patient.whatsapp_number}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="flex items-center gap-2">
+                                    <span className={`badge ${statusColors[selected.status]}`}>
+                                        {statusLabels[selected.status]}
+                                    </span>
+
+                                    {isAdmin && selected.status === 'active' && (
+                                        <button
+                                            onClick={handleTake}
+                                            className="btn-primary py-1.5 px-3 text-xs"
+                                        >
+                                            🎧 Tomar
+                                        </button>
+                                    )}
+
+                                    {isAdmin && selected.status === 'in_agent' && (
+                                        <div className="relative">
+                                            <button
+                                                onClick={() => setShowTransfer(!showTransfer)}
+                                                className="btn-ghost py-1.5 px-3 text-xs border border-[#e4ede8]"
+                                            >
+                                                🔄 Transferir
+                                            </button>
+
+                                            {showTransfer && (
+                                                <div className="absolute right-0 top-full mt-1 bg-white border border-[#e4ede8] rounded-xl shadow-lg z-10 w-48 py-1">
+                                                    {agents
+                                                        .filter(a => a.id !== agent?.agent_id)
+                                                        .map((a: any) => (
+                                                            <button
+                                                                key={a.id}
+                                                                onClick={() => handleTransfer(a.id)}
+                                                                className="w-full text-left px-3 py-2 text-xs hover:bg-brand-50 text-brand-800"
+                                                            >
+                                                                {a.name}{' '}
+                                                                <span className="text-[#6b8a78]">
+                                                                    ({a.current_load} activas)
+                                                                </span>
+                                                            </button>
+                                                        ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+
+                                    {selected.status !== 'completed' && selected.status !== 'closed' && (
+                                        <button
+                                            onClick={handleClose}
+                                            className="btn-ghost py-1.5 px-3 text-xs border border-red-200 text-red-500 hover:bg-red-50"
+                                        >
+                                            ✓ Cerrar
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+
+                            {selected.ai_summary && (
+                                <div className="mx-4 mt-3 p-3 bg-blue-50 border border-blue-200 rounded-xl">
+                                    <div className="text-xs font-semibold text-blue-700 mb-1">
+                                        🤖 Resumen IA de la conversación
+                                    </div>
+
+                                    <p className="text-xs text-blue-800 whitespace-pre-line">
+                                        {selected.ai_summary}
+                                    </p>
+
+                                    {selected.escalation_reason && (
+                                        <div className="mt-1.5 text-[10px] text-blue-600">
+                                            <strong>Motivo escalada:</strong>{' '}
+                                            {selected.escalation_reason}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            <div className="flex-1 overflow-y-auto px-4 py-4 space-y-2">
+                                {selected.messages.map(msg => (
+                                    <div
+                                        key={msg.id}
+                                        className={`flex ${
+                                            msg.direction === 'outbound'
+                                                ? 'justify-end'
+                                                : 'justify-start'
+                                        }`}
+                                    >
+                                        <div
+                                            className={`max-w-[75%] rounded-2xl px-3.5 py-2.5 text-sm ${
+                                                msg.direction === 'outbound'
+                                                    ? msg.sent_by_bot
+                                                        ? 'bg-brand-600 text-white rounded-br-sm'
+                                                        : 'bg-blue-600 text-white rounded-br-sm'
+                                                    : 'bg-white text-brand-900 border border-[#e4ede8] rounded-bl-sm shadow-sm'
+                                            }`}
+                                        >
+                                            {msg.direction === 'outbound' && (
+                                                <div className="text-[9px] opacity-70 mb-0.5">
+                                                    {msg.sent_by_bot ? '🤖 Bot' : '👤 Agente'}
+                                                </div>
+                                            )}
+
+                                            <p className="whitespace-pre-wrap leading-relaxed">
+                                                {msg.content}
+                                            </p>
+
+                                            <div className="text-[9px] mt-1 opacity-60 text-right">
+                                                {new Date(msg.created_at).toLocaleTimeString('es', {
+                                                    hour: '2-digit',
+                                                    minute: '2-digit',
+                                                })}
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+
+                                {selected.messages.length === 0 && (
+                                    <div className="text-center py-8 text-sm text-[#6b8a78]">
+                                        Sin mensajes aún
+                                    </div>
+                                )}
+
+                                <div ref={messagesEndRef} />
+                            </div>
+
+                            {canRespond &&
+                            selected.status !== 'completed' &&
+                            selected.status !== 'closed' ? (
+                                <div className="bg-white border-t border-[#e4ede8] px-4 py-3">
+                                    <div className="flex gap-2 items-end">
+                                        <textarea
+                                            className="input flex-1 resize-none min-h-[44px] max-h-32 text-sm"
+                                            placeholder="Escribe tu respuesta al cliente..."
+                                            value={message}
+                                            onChange={e => setMessage(e.target.value)}
+                                            onKeyDown={e => {
+                                                if (e.key === 'Enter' && !e.shiftKey) {
+                                                    e.preventDefault()
+                                                    handleSend()
+                                                }
+                                            }}
+                                            rows={1}
+                                        />
+
+                                        <button
+                                            onClick={handleSend}
+                                            disabled={sending || !message.trim()}
+                                            className="btn-primary px-4 py-2.5 flex-shrink-0 disabled:opacity-40"
+                                        >
+                                            {sending ? '...' : 'Enviar'}
+                                        </button>
+                                    </div>
+
+                                    <p className="text-[10px] text-[#6b8a78] mt-1.5">
+                                        Enter para enviar · Shift+Enter para nueva línea
+                                    </p>
+                                </div>
+                            ) : (
+                                <div className="bg-gray-50 border-t border-[#e4ede8] px-4 py-3 text-center text-xs text-[#6b8a78]">
+                                    {selected.status === 'completed' || selected.status === 'closed'
+                                        ? '✓ Conversación cerrada'
+                                        : 'Toma la conversación para poder responder'}
+                                </div>
+                            )}
+                        </>
+                    )}
                 </div>
-                )}
-            </>
-            )}
-        </div>
+            </div>
         </div>
     )
 }

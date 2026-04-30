@@ -1,6 +1,7 @@
 from __future__ import annotations
 import logging
 from contextlib import asynccontextmanager
+import asyncio
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -16,6 +17,9 @@ from app.api.routes.health        import router as health_router
 from app.api.routes.plan          import router as plan_router
 from app.api.routes.reports       import router as reports_router
 from app.api.routes.webhook       import router as webhook_router
+from app.api.routes.realtime      import router as realtime_router
+
+from app.services.realtime_manager import realtime_manager
 from app.core.settings import settings
 
 logging.basicConfig(
@@ -28,6 +32,11 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("🚀 %s | env=%s", settings.app_name, settings.app_env)
+    loop = asyncio.get_running_loop()
+    realtime_manager.set_loop(loop)
+
+    logger.info("⚡ Realtime WebSocket listo")
+
     yield
 
 
@@ -48,6 +57,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 app.include_router(health_router)
 app.include_router(webhook_router)
 app.include_router(auth_router)
@@ -60,3 +70,4 @@ app.include_router(dashboard_router)
 app.include_router(reports_router)
 app.include_router(conversations_router)
 app.include_router(deliveries_router)
+app.include_router(realtime_router)

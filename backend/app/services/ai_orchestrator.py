@@ -42,6 +42,7 @@ from app.services.agent_router import AgentRouter
 from app.services.analytics_service import AnalyticsService
 from app.services.gemini_service import GeminiService
 from app.services.notification_service import NotificationService
+from app.services.realtime_manager import realtime_manager
 
 logger = logging.getLogger(__name__)
 
@@ -121,6 +122,18 @@ class AIOrchestrator:
 
         # ── 4. Registrar mensaje entrante ─────────────────────────────────────
         self._log_msg(session.id, number, "inbound", text, msg_type, inbox_msg.meta_message_id, False)
+        realtime_manager.broadcast_sync({
+            "type": "new_message",
+            "session_id": session.id,
+            "patient_id": patient.id,
+            "customer_name": patient.full_name or inbox_msg.profile_name or "Cliente",
+            "whatsapp_number": number,
+            "direction": "inbound",
+            "content": text,
+            "message_type": msg_type,
+            "assigned_agent_id": session.assigned_agent_id,
+            "created_at": datetime.utcnow().isoformat(),
+        })
         self.analytics.message_received(session.id, patient.id, msg_type)
 
         # ── 5a. Sesión completada → detectar respuesta de encuesta ─────────────
