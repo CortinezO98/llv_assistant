@@ -123,7 +123,72 @@ class AIOrchestrator:
         self._log_msg(session.id, number, "inbound", text, msg_type, inbox_msg.meta_message_id, False)
         self.analytics.message_received(session.id, patient.id, msg_type)
 
-        # ── 5. Sesión en modo agente → solo registrar, no procesar con IA ─────
+        # ── 5a. Sesión completada → detectar respuesta de encuesta ─────────────
+        if session.status == "completed":
+            import copy
+            from sqlalchemy.orm.attributes import flag_modified
+            ctx = session.context_json or {}
+            if isinstance(ctx, str):
+                try: ctx = __import__("json").loads(ctx)
+                except: ctx = {}
+
+            # Si ya respondió la encuesta → ignorar y dejar que cree sesión nueva
+            if ctx.get("survey_answered"):
+                # Crear sesión nueva en lugar de usar la completed
+                new_session = Session(
+                    patient_id      = patient.id,
+                    whatsapp_number = number,
+                    status          = "active",
+                    context_json    = {"history": []},
+                )
+                self.db.add(new_session)
+                self.db.flush()
+                session = new_session
+                # Continuar flujo normal (pasar al paso 6)
+            else:
+                score = None
+                stripped = text.strip()
+                if stripped in ("1", "2", "3", "4", "5"):
+                    score = int(stripped)
+                elif "⭐" in stripped:
+                    score = stripped.count("⭐")
+                if score and 1 <= score <= 5:
+                    agent_id = session.assigned_agent_id
+                    self.analytics.track(
+                        "satisfaction_received",
+                        session_id=session.id,
+                        patient_id=patient.id,
+                        agent_id=agent_id,
+                        score=score,
+                    )
+                    # Marcar encuesta como respondida
+                    ctx["survey_answered"] = True
+                    session.context_json = copy.deepcopy(ctx)
+                    flag_modified(session, "context_json")
+                    self.db.flush()
+                    stars = "⭐" * score
+                    reply = (
+                        f"¡Gracias por tu calificación! {stars}\n\n"
+                        f"Tu opinión es muy importante para nosotros. "
+                        f"¡Hasta la próxima! 💙✨"
+                    )
+                    self._send(number, reply)
+                    inbox_msg.status = "done"
+                    self.db.flush()
+                    return {"ok": True, "skipped": True, "reason": "completed_survey"}
+                else:
+                    # Respuesta no es calificación → crear sesión nueva
+                    new_session = Session(
+                        patient_id      = patient.id,
+                        whatsapp_number = number,
+                        status          = "active",
+                        context_json    = {"history": []},
+                    )
+                    self.db.add(new_session)
+                    self.db.flush()
+                    session = new_session
+
+        # ── 5b. Sesión en modo agente → solo registrar, no procesar con IA ────
         if session.status == "in_agent":
             inbox_msg.status = "done"
             self.db.flush()
@@ -654,6 +719,20 @@ class AIOrchestrator:
             .first()
         )
         if not session:
+            # Buscar sesión completada recientemente para detectar respuesta de encuesta
+            from datetime import timedelta
+            recent_completed = (
+                self.db.query(Session)
+                .filter(
+                    Session.whatsapp_number == number,
+                    Session.status == "completed",
+                    Session.updated_at >= datetime.utcnow() - timedelta(hours=24),
+                )
+                .order_by(Session.updated_at.desc())
+                .first()
+            )
+            if recent_completed:
+                return recent_completed
             session = Session(
                 patient_id    = patient.id,
                 whatsapp_number = number,

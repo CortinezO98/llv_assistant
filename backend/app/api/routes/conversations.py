@@ -260,8 +260,10 @@ def close_conversation(
     # ── Enviar encuesta de satisfacción al cliente ──────────────────────────
     if patient and patient.whatsapp_number:
         try:
+            agent_name = agent.name if agent else "nuestro equipo"
             survey_msg = (
-                "¡Gracias por contactarnos! 💙\n\n"
+                f"¡Gracias por contactarnos! 💙\n\n"
+                f"Fuiste atendido/a por *{agent_name}*.\n\n"
                 "Nos encantaría saber cómo fue tu experiencia con LLV Wellness Clinic.\n\n"
                 "Por favor califica nuestro servicio del *1 al 5*:\n"
                 "⭐ 1 - Muy malo\n"
@@ -269,16 +271,21 @@ def close_conversation(
                 "⭐⭐⭐ 3 - Regular\n"
                 "⭐⭐⭐⭐ 4 - Bueno\n"
                 "⭐⭐⭐⭐⭐ 5 - Excelente\n\n"
-                "_Tu opinión nos ayuda a mejorar_ 🙏"
+                "_Responde con el número del 1 al 5_ 🙏"
             )
+            import json as _json
             outbox = OutboxMessage(
                 whatsapp_number=patient.whatsapp_number,
-                payload_json={"type": "text", "text": {"body": survey_msg}},
+                payload_json=_json.dumps({
+                    "to": patient.whatsapp_number,
+                    "text": survey_msg,
+                }),
                 status="pending",
             )
             db.add(outbox)
             db.commit()
             flush_outbox()
+            logger.info("Encuesta enviada a %s", patient.whatsapp_number)
         except Exception as e:
             logger.warning("Error enviando encuesta: %s", e)
 

@@ -167,3 +167,51 @@ def get_analytics_timeline(
             result[day] = {"date": day}
         result[day][row.event_type] = row.count
     return list(result.values())
+
+# ── Satisfacción por agente ───────────────────────────────────────────────────
+@router.get("/agents-satisfaction")
+def agents_satisfaction(
+    days: int = 30,
+    db: DBSession = Depends(get_db),
+    _agent: Agent = Depends(get_current_agent),
+):
+    """Calificación promedio y total de encuestas por agente."""
+    from sqlalchemy import func as sqlfunc
+    from datetime import datetime, timedelta
+    from app.db.models.analytics import AnalyticsEvent
+    from app.db.models.agent import Agent as AgentModel
+
+    since = datetime.utcnow() - timedelta(days=days)
+
+    rows = (
+        db.query(
+            AnalyticsEvent.agent_id,
+            sqlfunc.avg(
+                sqlfunc.cast(
+                    sqlfunc.json_extract(AnalyticsEvent.metadata_json, "$.score"),
+                    sqlfunc.literal_column("DECIMAL(3,1)")
+                )
+            ).label("avg_score"),
+            sqlfunc.count(AnalyticsEvent.id).label("total_surveys"),
+        )
+        .filter(
+            AnalyticsEvent.event_type == "satisfaction_received",
+            AnalyticsEvent.created_at >= since,
+            AnalyticsEvent.agent_id.isnot(None),
+        )
+        .group_by(AnalyticsEvent.agent_id)
+        .all()
+    )
+
+    result = []
+    for row in rows:
+        agent_obj = db.query(AgentModel).filter(AgentModel.id == row.agent_id).first()
+        result.append({
+            "agent_id":     row.agent_id,
+            "agent_name":   agent_obj.name if agent_obj else "Desconocido",
+            "avg_score":    round(float(row.avg_score or 0), 2),
+            "total_surveys": row.total_surveys,
+        })
+
+    result.sort(key=lambda x: x["avg_score"], reverse=True)
+    return result

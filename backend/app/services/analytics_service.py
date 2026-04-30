@@ -75,8 +75,8 @@ class AnalyticsService:
     def session_completed(self, session_id, patient_id):
         self.track("session_completed", session_id=session_id, patient_id=patient_id)
 
-    def satisfaction_received(self, session_id, patient_id, score: int):
-        self.track("satisfaction_received", session_id=session_id, patient_id=patient_id, score=score)
+    def satisfaction_received(self, session_id, patient_id, score: int, agent_id=None):
+        self.track("satisfaction_received", session_id=session_id, patient_id=patient_id, agent_id=agent_id, score=score)
 
     def plan_alert(self, level: int, count: int, limit: int):
         self.track(f"plan_alert_{level}", count=count, limit=limit)
