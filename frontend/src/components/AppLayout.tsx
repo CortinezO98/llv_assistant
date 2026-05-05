@@ -1,23 +1,26 @@
-import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useEffect, useState } from 'react'
+import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import Icons from './Icons'
 import { useAuth } from '../context/AuthContext'
 import { conversationsApi } from '../api/client'
 
 const NAV_ITEMS = [
-  { to: '/',              label: 'Dashboard',       Icon: Icons.Dashboard,    roles: ['admin', 'supervisor'] },
-  { to: '/conversations', label: 'Conversaciones',  Icon: Icons.Chat,         roles: ['admin', 'supervisor', 'agent'], badge: true },
-  { to: '/appointments',  label: 'Citas',           Icon: Icons.Calendar,     roles: ['admin', 'supervisor', 'agent'] },
-  { to: '/deliveries',    label: 'Entregas/Envíos', Icon: Icons.Package,      roles: ['admin', 'supervisor', 'agent'] },
-  { to: '/patients',      label: 'Pacientes',       Icon: Icons.Users,        roles: ['admin', 'supervisor', 'agent'] },
-  { to: '/agents',        label: 'Agentes',         Icon: Icons.Headphones,   roles: ['admin', 'supervisor'] },
-  { to: '/faq',           label: 'Base FAQ',        Icon: Icons.Book,         roles: ['admin', 'supervisor'] },
-  { to: '/reports',       label: 'Reportería',      Icon: Icons.BarChart,     roles: ['admin', 'supervisor'] },
-  { to: '/plan',          label: 'Plan / Uso',      Icon: Icons.Zap,          roles: ['admin'] },
+  { to: '/',              label: 'Dashboard',       Icon: Icons.Dashboard,    roles: ['admin', 'supervisor', 'superadmin'] },
+  { to: '/conversations', label: 'Conversaciones',  Icon: Icons.Chat,         roles: ['admin', 'supervisor', 'agent', 'superadmin'], badge: true },
+  { to: '/appointments',  label: 'Citas',           Icon: Icons.Calendar,     roles: ['admin', 'supervisor', 'agent', 'superadmin'] },
+  { to: '/deliveries',    label: 'Entregas/Envíos', Icon: Icons.Package,      roles: ['admin', 'supervisor', 'agent', 'superadmin'] },
+  { to: '/patients',      label: 'Pacientes',       Icon: Icons.Users,        roles: ['admin', 'supervisor', 'agent', 'superadmin'] },
+  { to: '/agents',        label: 'Agentes',         Icon: Icons.Headphones,   roles: ['admin', 'supervisor', 'superadmin'] },
+  { to: '/faq',           label: 'Base FAQ',        Icon: Icons.Book,         roles: ['admin', 'supervisor', 'superadmin'] },
+  { to: '/reports',       label: 'Reportería',      Icon: Icons.BarChart,     roles: ['admin', 'supervisor', 'superadmin'] },
+  { to: '/plan',          label: 'Plan / Uso',      Icon: Icons.Zap,          roles: ['admin', 'superadmin'] },
 ]
 
 const ROLE_LABELS: Record<string, string> = {
-  admin: 'Administrador', supervisor: 'Supervisor', agent: 'Agente',
+  admin:      'Administrador',
+  supervisor: 'Supervisor',
+  agent:      'Agente',
+  superadmin: '⚡ Superadmin',
 }
 
 export default function AppLayout() {
@@ -26,7 +29,6 @@ export default function AppLayout() {
   const role = agent?.role || 'agent'
   const visibleItems = NAV_ITEMS.filter(item => item.roles.includes(role))
 
-  // Badge: conversaciones en_agent sin leer
   const [pendingCount, setPendingCount] = useState(0)
 
   useEffect(() => {
@@ -36,7 +38,7 @@ export default function AppLayout() {
         .catch(() => {})
     }
     check()
-    const interval = setInterval(check, 10000) // cada 10 segundos
+    const interval = setInterval(check, 10000)
     return () => clearInterval(interval)
   }, [])
 
@@ -61,7 +63,10 @@ export default function AppLayout() {
         {/* Rol */}
         <div className="px-4 py-2.5 border-b border-white/10">
           <span className="text-[10px] font-semibold tracking-wider uppercase px-2 py-1 rounded-md"
-            style={{ background: 'rgba(198,169,107,0.15)', color: '#C6A96B' }}>
+            style={{
+              background: role === 'superadmin' ? 'rgba(167,139,250,0.2)' : 'rgba(198,169,107,0.15)',
+              color: role === 'superadmin' ? '#c4b5fd' : '#C6A96B',
+            }}>
             {ROLE_LABELS[role] || role}
           </span>
         </div>
@@ -78,7 +83,6 @@ export default function AppLayout() {
               style={({ isActive }) => isActive ? { background: '#C6A96B' } : {}}>
               <Icon />
               <span className="flex-1">{label}</span>
-              {/* Badge de notificación */}
               {badge && pendingCount > 0 && (
                 <span className="flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold animate-pulse-dot"
                   style={{ background: '#E24B4A', color: 'white' }}>
@@ -93,7 +97,10 @@ export default function AppLayout() {
         <div className="px-3 py-4 border-t border-white/10">
           <div className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl" style={{ background: 'rgba(255,255,255,0.07)' }}>
             <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
-              style={{ background: '#C6A96B', color: '#0b4c45' }}>
+              style={{
+                background: role === 'superadmin' ? '#c4b5fd' : '#C6A96B',
+                color: '#0b4c45',
+              }}>
               {agent?.name?.charAt(0) || 'A'}
             </div>
             <div className="flex-1 min-w-0">
