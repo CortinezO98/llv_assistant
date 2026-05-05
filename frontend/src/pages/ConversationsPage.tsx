@@ -748,8 +748,9 @@ export default function ConversationsPage() {
 
                                     {conv.last_message && (
                                         <p className="text-[11px] text-[#6b8a78] truncate ml-10">
-                                            {conv.last_message_direction === 'inbound' ? 'Cliente: ' : 'Equipo: '}
-                                            {conv.last_message}
+                                            {typeof conv.last_message === 'string'
+                                                ? conv.last_message
+                                                : (conv.last_message as any)?.content || ''}
                                         </p>
                                     )}
                                     {conv.assigned_agent && (

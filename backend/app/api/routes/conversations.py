@@ -124,29 +124,31 @@ def list_conversations(
                 ctx = {}
 
         result.append({
-            "id": s.id,
+            "session_id": s.id,
             "status": s.status,
-            "whatsapp_number": s.whatsapp_number,
-            "created_at": str(s.created_at),
-            "updated_at": str(s.updated_at),
+            "channel": s.channel,
             "patient": {
                 "id": patient.id if patient else None,
-                "name": patient.full_name or "Cliente" if patient else "Cliente",
+                "name": patient.full_name if patient and patient.full_name else "Cliente",
                 "whatsapp_number": s.whatsapp_number,
                 "location_type": patient.location_type if patient else "latam",
                 "is_recurrent": bool(patient.is_recurrent) if patient else False,
             },
             "assigned_agent": {
-                "id": assigned.id,
-                "name": assigned.name,
+                "id": assigned.id if assigned else None,
+                "name": assigned.name if assigned else None,
             } if assigned else None,
-            "last_message": {
-                "content": last_msg.content,
-                "direction": last_msg.direction,
-                "created_at": str(last_msg.created_at),
-            } if last_msg else None,
+
+            "last_message": last_msg.content if last_msg else None,
+            "last_message_at": str(last_msg.created_at) if last_msg else None,
+            "last_message_id": last_msg.id if last_msg else None,
+            "last_message_direction": last_msg.direction if last_msg else None,
+            "last_message_sent_by_bot": bool(last_msg.sent_by_bot) if last_msg else None,
+
             "ai_summary": ctx.get("agent_summary"),
             "escalation_reason": ctx.get("escalation_reason"),
+            "created_at": str(s.created_at),
+            "updated_at": str(s.updated_at),
         })
 
     return result
@@ -163,22 +165,47 @@ def get_messages(
 
     messages = (
         db.query(MessageLog)
-        .filter(MessageLog.session_id == session.id)
+        .filter(MessageLog.session_id == session_id)
         .order_by(MessageLog.created_at.asc())
         .all()
     )
 
-    return [
-        {
-            "id": m.id,
-            "direction": m.direction,
-            "content": m.content,
-            "message_type": m.message_type,
-            "sent_by_bot": bool(m.sent_by_bot),
-            "created_at": str(m.created_at),
-        }
-        for m in messages
-    ]
+    patient = db.query(Patient).filter(Patient.id == session.patient_id).first()
+
+    ctx = session.context_json or {}
+
+    if isinstance(ctx, str):
+        try:
+            ctx = json.loads(ctx)
+        except Exception:
+            ctx = {}
+
+    return {
+        "session_id": session_id,
+        "status": session.status,
+        "patient": {
+            "id": patient.id if patient else None,
+            "name": patient.full_name if patient and patient.full_name else "Cliente",
+            "whatsapp_number": session.whatsapp_number,
+            "location_type": patient.location_type if patient else "latam",
+            "is_recurrent": bool(patient.is_recurrent) if patient else False,
+        },
+        "ai_summary": ctx.get("agent_summary"),
+        "escalation_reason": ctx.get("escalation_reason"),
+        "escalated_at": ctx.get("escalated_at"),
+        "messages": [
+            {
+                "id": m.id,
+                "direction": m.direction,
+                "content": m.content,
+                "message_type": m.message_type,
+                "sent_by_bot": bool(m.sent_by_bot),
+                "agent_id": m.agent_id,
+                "created_at": str(m.created_at),
+            }
+            for m in messages
+        ],
+    }
 
 
 # ── Enviar mensaje como agente ────────────────────────────────────────────────
