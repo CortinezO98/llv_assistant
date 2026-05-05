@@ -5,6 +5,7 @@ Control de consumo del plan y notificaciones por email.
 - Al 80%: alerta de advertencia
 - Al 100%: alerta de límite
 - Escalada a agente: notificación al agente asignado
+- can_process_conversation(): bloquea bot si servicio inactivo o sin cupo
 """
 import logging
 import smtplib
@@ -43,6 +44,8 @@ class NotificationService:
                 period_month=period,
                 conversation_count=0,
                 plan_limit=settings.plan_monthly_limit,
+                extra_conversations=0,
+                service_active=1,
             )
             self.db.add(usage)
             self.db.flush()
@@ -54,17 +57,19 @@ class NotificationService:
         usage.conversation_count = (usage.conversation_count or 0) + 1
         self.db.flush()
 
-        limit = usage.plan_limit or settings.plan_monthly_limit
+        base_limit = usage.plan_limit or settings.plan_monthly_limit
+        extra = usage.extra_conversations or 0
+        total_limit = base_limit + extra
         count = usage.conversation_count
-        pct = count / limit if limit else 0
+        pct = count / total_limit if total_limit else 0
 
         if pct >= 0.80 and not usage.alert_80_sent and settings.alert_email_80_percent:
-            self._send_alert_80(count, limit)
+            self._send_alert_80(count, total_limit)
             usage.alert_80_sent = 1
             self.db.flush()
 
         if pct >= 1.00 and not usage.alert_100_sent and settings.alert_email_100_percent:
-            self._send_alert_100(count, limit)
+            self._send_alert_100(count, total_limit)
             usage.alert_100_sent = 1
             self.db.flush()
 
@@ -73,26 +78,18 @@ class NotificationService:
     def get_current_usage(self) -> dict:
         """
         Fuente confiable para el dashboard:
-        calcula el uso mensual desde llv_analytics_events, no desde el contador acumulado.
-
-        Esto evita desfases cuando:
-        - una conversación no incrementó PlanUsage correctamente,
-        - se corrigió manualmente una sesión,
-        - hubo reinicios o errores antes del commit,
-        - el dashboard necesita reflejar conversaciones reales.
+        calcula el uso mensual desde llv_sessions, no desde analytics_events.
+        Esto hace que el plan mensual coincida con las conversaciones reales.
         """
         from sqlalchemy import func
-        from app.db.models.analytics import AnalyticsEvent
+        from app.db.models.session import Session
 
         today = date.today()
         period_start = date(today.year, today.month, 1)
 
         real_count = (
-            self.db.query(func.count(AnalyticsEvent.id))
-            .filter(
-                AnalyticsEvent.event_type == "conversation_started",
-                AnalyticsEvent.created_at >= period_start,
-            )
+            self.db.query(func.count(Session.id))
+            .filter(Session.created_at >= period_start)
             .scalar()
             or 0
         )
@@ -101,16 +98,42 @@ class NotificationService:
         usage.conversation_count = real_count
         self.db.flush()
 
-        limit = usage.plan_limit or settings.plan_monthly_limit
+        base_limit = usage.plan_limit or settings.plan_monthly_limit
+        extra = usage.extra_conversations or 0
+        total_limit = base_limit + extra
+
+        remaining = max(0, total_limit - real_count)
 
         return {
             "period": str(usage.period_month),
             "count": real_count,
-            "limit": limit,
-            "percentage": round((real_count / limit) * 100, 1) if limit else 0,
+            "base_limit": base_limit,
+            "extra_conversations": extra,
+            "limit": total_limit,
+            "remaining": remaining,
+            "percentage": round((real_count / total_limit) * 100, 1) if total_limit else 0,
+            "service_active": bool(usage.service_active),
+            "paid_at": str(usage.paid_at) if usage.paid_at else None,
+            "expires_at": str(usage.expires_at) if usage.expires_at else None,
+            "last_payment_reference": usage.last_payment_reference,
             "alert_80_sent": bool(usage.alert_80_sent),
             "alert_100_sent": bool(usage.alert_100_sent),
         }
+
+    def can_process_conversation(self) -> tuple[bool, str]:
+        """
+        Determina si el bot puede procesar nuevas conversaciones.
+        Retorna (True, 'ok') o (False, 'razón').
+        """
+        usage_data = self.get_current_usage()
+
+        if not usage_data["service_active"]:
+            return False, "service_inactive"
+
+        if usage_data["count"] >= usage_data["limit"]:
+            return False, "plan_limit_reached"
+
+        return True, "ok"
 
     # ── NOTIFICACIÓN AL AGENTE ────────────────────────────────────────────────
 
@@ -147,19 +170,13 @@ class NotificationService:
         <html>
         <body style="margin:0;padding:0;background:#f5f5f5;font-family:Arial,sans-serif">
           <div style="max-width:580px;margin:30px auto;background:white;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.1)">
-
-            <!-- Header -->
             <div style="background:#0b4c45;padding:24px 28px">
               <h1 style="color:#C6A96B;margin:0;font-size:20px">🔔 Tienes un cliente esperando</h1>
               <p style="color:rgba(255,255,255,0.7);margin:6px 0 0 0;font-size:13px">LLV Wellness Clinic · {hora}</p>
             </div>
-
-            <!-- Body -->
             <div style="padding:24px 28px">
               <p style="font-size:16px;color:#333">Hola <strong>{agent_name}</strong>,</p>
               <p style="font-size:14px;color:#555">Se te ha asignado una nueva conversación en el chat de LLV Assistant.</p>
-
-              <!-- Cliente info -->
               <div style="background:#F5F1EB;border-radius:8px;padding:16px;margin:16px 0">
                 <table style="width:100%;font-size:14px;color:#333">
                   <tr>
@@ -176,10 +193,7 @@ class NotificationService:
                   </tr>
                 </table>
               </div>
-
               {summary_html}
-
-              <!-- CTA -->
               <div style="text-align:center;margin:24px 0">
                 <a href="{DASHBOARD_URL}/conversations"
                    style="background:#0b4c45;color:white;padding:14px 32px;border-radius:8px;
@@ -187,14 +201,11 @@ class NotificationService:
                   💬 Ir al dashboard → Responder
                 </a>
               </div>
-
               <p style="font-size:12px;color:#999;text-align:center">
                 El cliente está esperando tu respuesta en tiempo real.<br>
                 Accede al dashboard y selecciona la conversación asignada.
               </p>
             </div>
-
-            <!-- Footer -->
             <div style="background:#F5F1EB;padding:16px 28px;border-top:1px solid #e5ddd4">
               <p style="font-size:11px;color:#7a6a55;margin:0;text-align:center">
                 LLV Aesthetic & Wellness Clinic · Sistema LLV Assistant
@@ -211,7 +222,6 @@ class NotificationService:
     # ── EMAIL HELPERS ─────────────────────────────────────────────────────────
 
     def _send_email_to(self, to_email: str, subject: str, html_body: str) -> None:
-        """Envía email a una dirección específica."""
         if not settings.smtp_user or not settings.smtp_password:
             logger.warning("SMTP no configurado — no se envió: %s", subject)
             return
@@ -235,12 +245,10 @@ class NotificationService:
             logger.exception("Error enviando email a %s: %s", to_email, exc)
 
     def _send_email(self, subject: str, html_body: str) -> None:
-        """Envía email al admin (alertas de plan)."""
         self._send_email_to(settings.admin_alert_email, subject, html_body)
 
     def _send_alert_80(self, count: int, limit: int) -> None:
         subject = "[LLV Assistant] ⚠️ Has usado el 80% de tus conversaciones"
-
         html = f"""
         <div style="font-family:Arial,sans-serif;max-width:600px;margin:auto">
           <div style="background:#0b4c45;padding:20px;border-radius:8px 8px 0 0">
@@ -255,12 +263,10 @@ class NotificationService:
           </div>
         </div>
         """
-
         self._send_email(subject, html)
 
     def _send_alert_100(self, count: int, limit: int) -> None:
         subject = "[LLV Assistant] 🚨 Límite de conversaciones alcanzado"
-
         html = f"""
         <div style="font-family:Arial,sans-serif;max-width:600px;margin:auto">
           <div style="background:#B71C1C;padding:20px;border-radius:8px 8px 0 0">
@@ -275,5 +281,4 @@ class NotificationService:
           </div>
         </div>
         """
-
         self._send_email(subject, html)

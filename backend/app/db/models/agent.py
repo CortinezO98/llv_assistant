@@ -13,7 +13,7 @@ class Agent(Base):
     email = Column(String(200), unique=True, nullable=False)
     password_hash = Column(String(255), nullable=False)
     role = Column(
-        Enum("agent", "supervisor", "admin", name="agent_role_enum"),
+        Enum("agent", "supervisor", "admin", "superadmin", name="agent_role_enum"),
         default="agent",
     )
     location = Column(
@@ -22,11 +22,24 @@ class Agent(Base):
         default="latam",
     )
     is_active = Column(SmallInteger, default=1)
-    current_load = Column(Integer, default=0)         # conversaciones activas asignadas
-    total_closed = Column(Integer, default=0)         # conversaciones cerradas históricas
+    current_load = Column(Integer, default=0)
+    total_closed = Column(Integer, default=0)
     created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 
     # Relaciones
-    active_sessions = relationship("Session", back_populates="assigned_agent")
-    confirmed_appointments = relationship("Appointment", back_populates="confirmed_by_agent")
-    verified_payments = relationship("Payment", back_populates="verified_by_agent")
+    active_sessions = relationship(
+        "Session",
+        back_populates="assigned_agent",
+        foreign_keys="Session.assigned_agent_id",
+    )
+    verified_payments = relationship(
+        "Payment",
+        back_populates="verified_by_agent",
+        foreign_keys="Payment.verified_by_agent_id",
+    )
+    confirmed_appointments = relationship(
+        "Appointment",
+        back_populates="confirmed_by_agent",
+        foreign_keys="Appointment.confirmed_by_agent_id",
+    )

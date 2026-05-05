@@ -70,15 +70,27 @@ export const faqApi = {
 // ── Plan ──────────────────────────────────────────────────────────────────────
 export const planApi = {
   getUsage: () => api.get('/plan/usage'),
+  renew: (data: { plan_limit: number; payment_reference?: string; notes?: string }) =>
+    api.post('/plan/renew', data),
+  addConversations: (data: { extra_conversations: number; payment_reference?: string; notes?: string }) =>
+    api.post('/plan/add-conversations', data),
+  toggleService: (data: { service_active: boolean; notes?: string }) =>
+    api.post('/plan/toggle-service', data),
 }
 
 // ── Conversations ─────────────────────────────────────────────────────────────
 export const conversationsApi = {
   list: (status?: string) => api.get(`/conversations/${status ? `?status=${status}` : ''}`),
   getMessages: (sessionId: number) => api.get(`/conversations/${sessionId}/messages`),
-  send: (sessionId: number, message: string) => api.post(`/conversations/${sessionId}/send`, { message }),
+  send: (sessionId: number, message: string) =>
+    api.post(`/conversations/${sessionId}/send`, { message }),
   take: (sessionId: number) => api.post(`/conversations/${sessionId}/take`),
   close: (sessionId: number) => api.post(`/conversations/${sessionId}/close`),
-  transfer: (sessionId: number, agentId: number) => api.post(`/conversations/${sessionId}/transfer`, { agent_id: agentId }),
+  transfer: (sessionId: number, agentId: number) =>
+    api.post(`/conversations/${sessionId}/transfer`, { agent_id: agentId }),
   myStats: () => api.get('/conversations/stats/me'),
+  createAppointment: (sessionId: number, data: any) =>
+    api.post(`/conversations/${sessionId}/appointment`, data),
+  createDelivery: (sessionId: number, data: any) =>
+    api.post(`/conversations/${sessionId}/delivery`, data),
 }

@@ -1,6 +1,6 @@
 from sqlalchemy import (
     Column, Integer, String, DateTime, Enum, Text, ForeignKey,
-    SmallInteger, BigInteger, Date
+    SmallInteger, BigInteger, Date, Numeric
 )
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -46,10 +46,29 @@ class PlanUsage(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     period_month = Column(Date, nullable=False, unique=True, index=True)
+
     conversation_count = Column(Integer, default=0)
+
+    # Plan base contratado
     plan_limit = Column(Integer, default=1500)
+
+    # Conversaciones adicionales compradas
+    extra_conversations = Column(Integer, default=0)
+
+    # Control de servicio
+    service_active = Column(SmallInteger, default=1)
+
+    # Control de pago mensual
+    paid_at = Column(DateTime, nullable=True)
+    expires_at = Column(DateTime, nullable=True)
+    last_payment_reference = Column(String(150), nullable=True)
+
+    notes = Column(Text, nullable=True)
+    updated_by_agent_id = Column(Integer, nullable=True)
+
     alert_80_sent = Column(SmallInteger, default=0)
     alert_100_sent = Column(SmallInteger, default=0)
+
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 
 

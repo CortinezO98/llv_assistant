@@ -24,17 +24,27 @@ def get_current_agent(
 
 
 def require_admin(agent: Agent = Depends(get_current_agent)) -> Agent:
-    if agent.role not in ("admin", "supervisor"):
+    if agent.role not in ("admin", "supervisor", "superadmin"):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Se requiere rol admin o supervisor")
     return agent
 
 
 def require_supervisor(agent: Agent = Depends(get_current_agent)) -> Agent:
-    if agent.role not in ("admin", "supervisor"):
+    if agent.role not in ("admin", "supervisor", "superadmin"):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Se requiere rol supervisor o admin")
     return agent
 
 
 def require_agent_or_above(agent: Agent = Depends(get_current_agent)) -> Agent:
     """Cualquier rol autenticado puede acceder."""
+    return agent
+
+
+def require_superadmin(agent: Agent = Depends(get_current_agent)) -> Agent:
+    """Solo superadmin puede acceder — control total del plan y servicio."""
+    if agent.role != "superadmin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Se requiere rol superadmin",
+        )
     return agent
