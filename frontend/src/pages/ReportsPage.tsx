@@ -10,6 +10,7 @@ interface ReportData {
     channels: Record<string, number>
     satisfaction: { note: string }
     patients: { new_this_period: number; total_recurrent: number }
+    insights: { top_interests: { interest: string; count: number }[]; top_unconverted_products: { product: string; attempts: number }[] }
 }
 
 const statusLabels: Record<string, string> = {
@@ -41,19 +42,38 @@ export default function ReportsPage() {
     const [data, setData] = useState<ReportData | null>(null)
     const [loading, setLoading] = useState(true)
     const [days, setDays] = useState(30)
+    const [dateFrom, setDateFrom] = useState('')
+    const [dateTo, setDateTo] = useState('')
+    const [channel, setChannel] = useState('')
+    const [sessionStatus, setSessionStatus] = useState('')
+    const [products, setProducts] = useState('')
+    const [location, setLocation] = useState('')
+    const [paymentStatus, setPaymentStatus] = useState('')
     const [downloading, setDownloading] = useState<'excel' | 'pdf' | null>(null)
+
+    const queryString = () => {
+        const params = new URLSearchParams({ days: String(days) })
+        if (dateFrom) params.set('date_from', dateFrom)
+        if (dateTo) params.set('date_to', dateTo)
+        if (channel) params.set('channel', channel)
+        if (sessionStatus) params.set('session_status', sessionStatus)
+        if (products) params.set('products', products)
+        if (location) params.set('location', location)
+        if (paymentStatus) params.set('payment_status', paymentStatus)
+        return params.toString()
+    }
 
     useEffect(() => {
         setLoading(true)
-        api.get(`/reports/summary?days=${days}`)
+        api.get(`/reports/summary?${queryString()}`)
         .then(r => setData(r.data))
         .finally(() => setLoading(false))
-    }, [days])
+    }, [days, dateFrom, dateTo, channel, sessionStatus, products, location, paymentStatus])
 
     const download = async (format: 'excel' | 'pdf') => {
         setDownloading(format)
         try {
-        const res = await api.get(`/reports/export/${format}?days=${days}`, { responseType: 'blob' })
+        const res = await api.get(`/reports/export/${format}?${queryString()}`, { responseType: 'blob' })
         const ext = format === 'excel' ? 'xlsx' : 'pdf'
         const url = URL.createObjectURL(res.data)
         const a = document.createElement('a')
@@ -109,6 +129,24 @@ export default function ReportsPage() {
             </button>
             </div>
         </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-7 gap-2 p-3 bg-white border border-[#e4ede8] rounded-xl">
+                <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="px-2 py-1.5 rounded border border-[#e4ede8] text-xs" />
+                <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="px-2 py-1.5 rounded border border-[#e4ede8] text-xs" />
+                <select value={channel} onChange={(e) => setChannel(e.target.value)} className="px-2 py-1.5 rounded border border-[#e4ede8] text-xs">
+                    <option value="">Canal: Todos</option><option value="whatsapp">WhatsApp</option><option value="instagram">Instagram</option><option value="web">Web</option>
+                </select>
+                <select value={sessionStatus} onChange={(e) => setSessionStatus(e.target.value)} className="px-2 py-1.5 rounded border border-[#e4ede8] text-xs">
+                    <option value="">Estado: Todos</option><option value="active">Activa</option><option value="in_agent">Con agente</option><option value="completed">Completada</option><option value="closed">Cerrada</option>
+                </select>
+                <input placeholder="Productos (coma)" value={products} onChange={(e) => setProducts(e.target.value)} className="px-2 py-1.5 rounded border border-[#e4ede8] text-xs" />
+                <select value={location} onChange={(e) => setLocation(e.target.value)} className="px-2 py-1.5 rounded border border-[#e4ede8] text-xs">
+                    <option value="">Ubicación: Todas</option><option value="arecibo">Arecibo</option><option value="bayamon">Bayamón</option><option value="latam">LATAM</option><option value="virtual">Virtual</option>
+                </select>
+                <select value={paymentStatus} onChange={(e) => setPaymentStatus(e.target.value)} className="px-2 py-1.5 rounded border border-[#e4ede8] text-xs">
+                    <option value="">Pago: Todos</option><option value="link_sent">Link enviado</option><option value="proof_received">Comprobante</option><option value="verified">Verificado</option><option value="rejected">Rechazado</option>
+                </select>
+            </div>
 
         {loading ? (
             <div className="flex items-center justify-center h-64">
@@ -211,6 +249,19 @@ export default function ReportsPage() {
                     ))}
                     </div>
                 )}
+                </Section>
+            </div>
+
+            <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Section title="Intereses más buscados" icon="🔎">
+                    {data.insights.top_interests.map((it, i) => (
+                        <KpiRow key={it.interest + i} label={it.interest} value={it.count} highlight={i % 2 === 0} />
+                    ))}
+                </Section>
+                <Section title="Productos con baja conversión" icon="📉">
+                    {data.insights.top_unconverted_products.map((it, i) => (
+                        <KpiRow key={it.product + i} label={it.product} value={it.attempts} highlight={i % 2 === 0} />
+                    ))}
                 </Section>
             </div>
 

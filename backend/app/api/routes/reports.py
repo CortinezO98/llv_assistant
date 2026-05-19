@@ -5,177 +5,86 @@ Reportería mensual para el equipo de soporte LRV.
 8 KPIs requeridos + exportación Excel y PDF.
 """
 import io
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from fastapi.responses import StreamingResponse
-from sqlalchemy import func
+from sqlalchemy import cast, func, String
 from sqlalchemy.orm import Session as DBSession
 
 from app.api.deps import get_current_agent
 from app.db.models.agent import Agent
 from app.db.models.appointment import Appointment
-from app.db.models.messaging import MessageLog, PlanUsage
+from app.db.models.analytics import AnalyticsEvent
 from app.db.models.patient import Patient
 from app.db.models.payment import Payment
 from app.db.models.session import Session
 from app.db.session import get_db
+from app.schemas.reports import ReportFilters
+from app.services.report_service import build_report_data, parse_products_csv
 
 router = APIRouter(prefix="/reports", tags=["reports"])
 
 
-def _build_report_data(db: DBSession, since: date, until: date) -> dict:
-    """Construye los datos del reporte para un período dado."""
 
-    # 1. Conversaciones iniciadas y usuarios únicos
-    total_sessions = db.query(func.count(Session.id)).filter(
-        Session.created_at >= since, Session.created_at <= until
-    ).scalar() or 0
 
-    unique_users = db.query(func.count(func.distinct(Session.patient_id))).filter(
-        Session.created_at >= since, Session.created_at <= until
-    ).scalar() or 0
+def _parse_products(products: str | None) -> list[str]:
+    return parse_products_csv(products)
 
-    # 2. % completadas y puntos de abandono
-    completed = db.query(func.count(Session.id)).filter(
-        Session.created_at >= since, Session.created_at <= until,
-        Session.status == "completed"
-    ).scalar() or 0
 
-    status_dist = dict(
-        db.query(Session.status, func.count(Session.id))
-        .filter(Session.created_at >= since, Session.created_at <= until)
-        .group_by(Session.status)
-        .all()
+def _build_report_data(
+    db: DBSession,
+    since: date,
+    until: date,
+    channel: str | None = None,
+    session_status: str | None = None,
+    agent_id: int | None = None,
+    products: list[str] | None = None,
+    location: str | None = None,
+    payment_status: str | None = None,
+) -> dict:
+    filters = ReportFilters(
+        date_from=since,
+        date_to=until,
+        channel=channel,
+        session_status=session_status,
+        agent_id=agent_id,
+        products=products or [],
+        location=location,
+        payment_status=payment_status,
     )
-    pct_completed = round((completed / total_sessions * 100), 1) if total_sessions else 0
-
-    # 3. Paso a agente
-    escalated = db.query(func.count(Session.id)).filter(
-        Session.created_at >= since, Session.created_at <= until,
-        Session.assigned_agent_id.isnot(None)
-    ).scalar() or 0
-    pct_escalated = round((escalated / total_sessions * 100), 1) if total_sessions else 0
-
-    # Agentes con más escaladas
-    agent_loads = (
-        db.query(Agent.name, func.count(Session.id).label("count"))
-        .join(Session, Session.assigned_agent_id == Agent.id)
-        .filter(Session.created_at >= since, Session.created_at <= until)
-        .group_by(Agent.id, Agent.name)
-        .order_by(func.count(Session.id).desc())
-        .all()
-    )
-
-    # 4. Conversión a citas y ventas
-    citas_total = db.query(func.count(Appointment.id)).filter(
-        Appointment.created_at >= since, Appointment.created_at <= until
-    ).scalar() or 0
-
-    citas_confirmed = db.query(func.count(Appointment.id)).filter(
-        Appointment.created_at >= since, Appointment.created_at <= until,
-        Appointment.status.in_(["confirmed", "completed"])
-    ).scalar() or 0
-
-    ventas = db.query(func.count(Payment.id)).filter(
-        Payment.created_at >= since, Payment.created_at <= until,
-        Payment.status == "verified"
-    ).scalar() or 0
-
-    conversion_citas = round((citas_confirmed / total_sessions * 100), 1) if total_sessions else 0
-
-    # Servicios más solicitados
-    top_services = (
-        db.query(Appointment.service, func.count(Appointment.id).label("count"))
-        .filter(Appointment.created_at >= since, Appointment.created_at <= until)
-        .group_by(Appointment.service)
-        .order_by(func.count(Appointment.id).desc())
-        .limit(5)
-        .all()
-    )
-
-    # 5. Ingresos
-    ingresos = db.query(func.sum(Payment.amount)).filter(
-        Payment.created_at >= since, Payment.created_at <= until,
-        Payment.status == "verified"
-    ).scalar() or 0
-
-    # Métodos de pago
-    payment_methods = dict(
-        db.query(Payment.payment_method, func.count(Payment.id))
-        .filter(Payment.created_at >= since, Payment.created_at <= until)
-        .group_by(Payment.payment_method)
-        .all()
-    )
-
-    # 6. Canales de entrada
-    channel_dist = dict(
-        db.query(Session.channel, func.count(Session.id))
-        .filter(Session.created_at >= since, Session.created_at <= until)
-        .group_by(Session.channel)
-        .all()
-    )
-
-    # 7. Satisfacción (placeholder)
-    satisfaction = {"score": None, "responses": 0, "note": "Encuesta post-conversación pendiente de implementar"}
-
-    # 8. Pacientes nuevos vs recurrentes
-    new_patients = db.query(func.count(Patient.id)).filter(
-        Patient.created_at >= since, Patient.created_at <= until
-    ).scalar() or 0
-
-    recurrent = db.query(func.count(Patient.id)).filter(
-        Patient.is_recurrent == 1
-    ).scalar() or 0
-
-    return {
-        "period": {"since": str(since), "until": str(until)},
-        "conversations": {
-            "total": total_sessions,
-            "unique_users": unique_users,
-            "completed": completed,
-            "pct_completed": pct_completed,
-            "status_distribution": status_dist,
-        },
-        "agents": {
-            "escalated": escalated,
-            "pct_escalated": pct_escalated,
-            "by_agent": [{"name": a.name, "count": a.count} for a in agent_loads],
-        },
-        "appointments": {
-            "total_requested": citas_total,
-            "confirmed": citas_confirmed,
-            "conversion_pct": conversion_citas,
-            "top_services": [{"service": s.service, "count": s.count} for s in top_services],
-        },
-        "sales": {
-            "verified_payments": ventas,
-            "total_revenue_usd": float(ingresos),
-            "payment_methods": payment_methods,
-        },
-        "channels": channel_dist,
-        "satisfaction": satisfaction,
-        "patients": {
-            "new_this_period": new_patients,
-            "total_recurrent": recurrent,
-        },
-    }
-
+    return build_report_data(db, filters)
 
 @router.get("/summary")
 def get_report_summary(
     days: int = 30,
+    date_from: date | None = Query(default=None),
+    date_to: date | None = Query(default=None),
+    channel: str | None = Query(default=None),
+    session_status: str | None = Query(default=None),
+    agent_id: int | None = Query(default=None),
+    products: str | None = Query(default=None),
+    location: str | None = Query(default=None),
+    payment_status: str | None = Query(default=None),
     db: DBSession = Depends(get_db),
     _: Agent = Depends(get_current_agent),
 ):
-    until = date.today()
-    since = until - timedelta(days=days)
-    return _build_report_data(db, since, until)
+    until = date_to or date.today()
+    since = date_from or (until - timedelta(days=days))
+    return _build_report_data(db, since, until, channel, session_status, agent_id, _parse_products(products), location, payment_status)
 
 
 @router.get("/export/excel")
 def export_excel(
     days: int = 30,
+    date_from: date | None = Query(default=None),
+    date_to: date | None = Query(default=None),
+    channel: str | None = Query(default=None),
+    session_status: str | None = Query(default=None),
+    agent_id: int | None = Query(default=None),
+    products: str | None = Query(default=None),
+    location: str | None = Query(default=None),
+    payment_status: str | None = Query(default=None),
     db: DBSession = Depends(get_db),
     _: Agent = Depends(get_current_agent),
 ):
@@ -183,9 +92,9 @@ def export_excel(
     import openpyxl
     from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 
-    until = date.today()
-    since = until - timedelta(days=days)
-    data = _build_report_data(db, since, until)
+    until = date_to or date.today()
+    since = date_from or (until - timedelta(days=days))
+    data = _build_report_data(db, since, until, channel, session_status, agent_id, _parse_products(products), location, payment_status)
 
     wb = openpyxl.Workbook()
 
@@ -337,6 +246,14 @@ def export_excel(
 @router.get("/export/pdf")
 def export_pdf(
     days: int = 30,
+    date_from: date | None = Query(default=None),
+    date_to: date | None = Query(default=None),
+    channel: str | None = Query(default=None),
+    session_status: str | None = Query(default=None),
+    agent_id: int | None = Query(default=None),
+    products: str | None = Query(default=None),
+    location: str | None = Query(default=None),
+    payment_status: str | None = Query(default=None),
     db: DBSession = Depends(get_db),
     _: Agent = Depends(get_current_agent),
 ):
@@ -349,9 +266,9 @@ def export_pdf(
         Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle,
     )
 
-    until = date.today()
-    since = until - timedelta(days=days)
-    data = _build_report_data(db, since, until)
+    until = date_to or date.today()
+    since = date_from or (until - timedelta(days=days))
+    data = _build_report_data(db, since, until, channel, session_status, agent_id, _parse_products(products), location, payment_status)
 
     output = io.BytesIO()
     doc = SimpleDocTemplate(output, pagesize=letter,
