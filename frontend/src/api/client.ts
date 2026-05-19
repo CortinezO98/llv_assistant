@@ -7,14 +7,12 @@ export const api = axios.create({
   headers: { 'Content-Type': 'application/json' },
 })
 
-// Interceptor: agrega token JWT a cada request
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('llv_token')
   if (token) config.headers.Authorization = `Bearer ${token}`
   return config
 })
 
-// Interceptor: redirige al login si el token expira
 api.interceptors.response.use(
   (res) => res,
   (err) => {
@@ -35,62 +33,65 @@ export const authApi = {
 
 // ── Dashboard ─────────────────────────────────────────────────────────────────
 export const dashboardApi = {
-  getKpis: (days = 30) => api.get(`/dashboard/kpis?days=${days}`),
-  getAgentsRanking: () => api.get('/dashboard/agents-ranking'),
+  getKpis:           (days = 30)  => api.get(`/dashboard/kpis?days=${days}`),
+  getAgentsRanking:  ()           => api.get('/dashboard/agents-ranking'),
   getRecentActivity: (limit = 20) => api.get(`/dashboard/recent-activity?limit=${limit}`),
+  getTimeline:       (days = 30)  => api.get(`/dashboard/analytics/timeline?days=${days}`),
+  getFlowMetrics:    (days = 30)  => api.get(`/dashboard/flow-metrics?days=${days}`),
+  getSatisfaction:   (days = 30)  => api.get(`/dashboard/agents-satisfaction?days=${days}`),
 }
 
 // ── Agents ────────────────────────────────────────────────────────────────────
 export const agentsApi = {
-  list: () => api.get('/agents/'),
-  create: (data: any) => api.post('/agents/', data),
+  list:   ()                    => api.get('/agents/'),
+  create: (data: any)           => api.post('/agents/', data),
   update: (id: number, data: any) => api.patch(`/agents/${id}`, data),
 }
 
 // ── Patients ──────────────────────────────────────────────────────────────────
 export const patientsApi = {
-  list: () => api.get('/patients/'),
-  get: (id: number) => api.get(`/patients/${id}`),
+  list: ()              => api.get('/patients/'),
+  get:  (id: number)   => api.get(`/patients/${id}`),
 }
 
 // ── Appointments ──────────────────────────────────────────────────────────────
 export const appointmentsApi = {
-  list: (status?: string) => api.get(`/appointments/${status ? `?status=${status}` : ''}`),
-  confirm: (id: number) => api.patch(`/appointments/${id}/confirm`),
+  list:    (status?: string) => api.get(`/appointments/${status ? `?status=${status}` : ''}`),
+  confirm: (id: number)      => api.patch(`/appointments/${id}/confirm`),
 }
 
 // ── FAQ ───────────────────────────────────────────────────────────────────────
 export const faqApi = {
-  list: (category?: string) => api.get(`/faq/${category ? `?category=${category}` : ''}`),
-  create: (data: any) => api.post('/faq/', data),
+  list:   (category?: string) => api.get(`/faq/${category ? `?category=${category}` : ''}`),
+  create: (data: any)          => api.post('/faq/', data),
   update: (id: number, data: any) => api.patch(`/faq/${id}`, data),
-  delete: (id: number) => api.delete(`/faq/${id}`),
+  delete: (id: number)         => api.delete(`/faq/${id}`),
 }
 
 // ── Plan ──────────────────────────────────────────────────────────────────────
 export const planApi = {
-  getUsage: () => api.get('/plan/usage'),
-  renew: (data: { plan_limit: number; payment_reference?: string; notes?: string }) =>
+  getUsage:         () => api.get('/plan/usage'),
+  renew:            (data: { plan_limit: number; payment_reference?: string; notes?: string }) =>
     api.post('/plan/renew', data),
   addConversations: (data: { extra_conversations: number; payment_reference?: string; notes?: string }) =>
     api.post('/plan/add-conversations', data),
-  toggleService: (data: { service_active: boolean; notes?: string }) =>
+  toggleService:    (data: { service_active: boolean; notes?: string }) =>
     api.post('/plan/toggle-service', data),
 }
 
 // ── Conversations ─────────────────────────────────────────────────────────────
 export const conversationsApi = {
-  list: (status?: string) => api.get(`/conversations/${status ? `?status=${status}` : ''}`),
-  getMessages: (sessionId: number) => api.get(`/conversations/${sessionId}/messages`),
-  send: (sessionId: number, message: string) =>
+  list:              (status?: string) => api.get(`/conversations/${status ? `?status=${status}` : ''}`),
+  getMessages:       (sessionId: number) => api.get(`/conversations/${sessionId}/messages`),
+  send:              (sessionId: number, message: string) =>
     api.post(`/conversations/${sessionId}/send`, { message }),
-  take: (sessionId: number) => api.post(`/conversations/${sessionId}/take`),
-  close: (sessionId: number) => api.post(`/conversations/${sessionId}/close`),
-  transfer: (sessionId: number, agentId: number) =>
+  take:              (sessionId: number) => api.post(`/conversations/${sessionId}/take`),
+  close:             (sessionId: number) => api.post(`/conversations/${sessionId}/close`),
+  transfer:          (sessionId: number, agentId: number) =>
     api.post(`/conversations/${sessionId}/transfer`, { agent_id: agentId }),
-  myStats: () => api.get('/conversations/stats/me'),
+  myStats:           () => api.get('/conversations/stats/me'),
   createAppointment: (sessionId: number, data: any) =>
     api.post(`/conversations/${sessionId}/appointment`, data),
-  createDelivery: (sessionId: number, data: any) =>
+  createDelivery:    (sessionId: number, data: any) =>
     api.post(`/conversations/${sessionId}/delivery`, data),
 }
