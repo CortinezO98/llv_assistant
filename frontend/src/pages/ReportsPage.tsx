@@ -47,6 +47,8 @@ export default function ReportsPage() {
     const [channel, setChannel] = useState('')
     const [sessionStatus, setSessionStatus] = useState('')
     const [products, setProducts] = useState('')
+    const [location, setLocation] = useState('')
+    const [paymentStatus, setPaymentStatus] = useState('')
     const [downloading, setDownloading] = useState<'excel' | 'pdf' | null>(null)
 
     const queryString = () => {
@@ -56,6 +58,8 @@ export default function ReportsPage() {
         if (channel) params.set('channel', channel)
         if (sessionStatus) params.set('session_status', sessionStatus)
         if (products) params.set('products', products)
+        if (location) params.set('location', location)
+        if (paymentStatus) params.set('payment_status', paymentStatus)
         return params.toString()
     }
 
@@ -64,7 +68,7 @@ export default function ReportsPage() {
         api.get(`/reports/summary?${queryString()}`)
         .then(r => setData(r.data))
         .finally(() => setLoading(false))
-    }, [days, dateFrom, dateTo, channel, sessionStatus, products])
+    }, [days, dateFrom, dateTo, channel, sessionStatus, products, location, paymentStatus])
 
     const download = async (format: 'excel' | 'pdf') => {
         setDownloading(format)
@@ -126,7 +130,7 @@ export default function ReportsPage() {
             </div>
         </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-5 gap-2 p-3 bg-white border border-[#e4ede8] rounded-xl">
+            <div className="grid grid-cols-1 md:grid-cols-7 gap-2 p-3 bg-white border border-[#e4ede8] rounded-xl">
                 <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="px-2 py-1.5 rounded border border-[#e4ede8] text-xs" />
                 <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="px-2 py-1.5 rounded border border-[#e4ede8] text-xs" />
                 <select value={channel} onChange={(e) => setChannel(e.target.value)} className="px-2 py-1.5 rounded border border-[#e4ede8] text-xs">
@@ -136,6 +140,12 @@ export default function ReportsPage() {
                     <option value="">Estado: Todos</option><option value="active">Activa</option><option value="in_agent">Con agente</option><option value="completed">Completada</option><option value="closed">Cerrada</option>
                 </select>
                 <input placeholder="Productos (coma)" value={products} onChange={(e) => setProducts(e.target.value)} className="px-2 py-1.5 rounded border border-[#e4ede8] text-xs" />
+                <select value={location} onChange={(e) => setLocation(e.target.value)} className="px-2 py-1.5 rounded border border-[#e4ede8] text-xs">
+                    <option value="">Ubicación: Todas</option><option value="arecibo">Arecibo</option><option value="bayamon">Bayamón</option><option value="latam">LATAM</option><option value="virtual">Virtual</option>
+                </select>
+                <select value={paymentStatus} onChange={(e) => setPaymentStatus(e.target.value)} className="px-2 py-1.5 rounded border border-[#e4ede8] text-xs">
+                    <option value="">Pago: Todos</option><option value="link_sent">Link enviado</option><option value="proof_received">Comprobante</option><option value="verified">Verificado</option><option value="rejected">Rechazado</option>
+                </select>
             </div>
 
         {loading ? (
