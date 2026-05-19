@@ -70,10 +70,7 @@ def _build_report_data(
     unique_users = db.query(func.count(func.distinct(Session.patient_id))).filter(*session_filters).scalar() or 0
 
     # 2. % completadas y puntos de abandono
-    completed = db.query(func.count(Session.id)).filter(
-        Session.created_at >= since, Session.created_at <= until,
-        Session.status == "completed"
-    ).scalar() or 0
+    completed = db.query(func.count(Session.id)).filter(*session_filters, Session.status == "completed").scalar() or 0
 
     status_dist = dict(
         db.query(Session.status, func.count(Session.id))
@@ -84,10 +81,7 @@ def _build_report_data(
     pct_completed = round((completed / total_sessions * 100), 1) if total_sessions else 0
 
     # 3. Paso a agente
-    escalated = db.query(func.count(Session.id)).filter(
-        Session.created_at >= since, Session.created_at <= until,
-        Session.assigned_agent_id.isnot(None)
-    ).scalar() or 0
+    escalated = db.query(func.count(Session.id)).filter(*session_filters, Session.assigned_agent_id.isnot(None)).scalar() or 0
     pct_escalated = round((escalated / total_sessions * 100), 1) if total_sessions else 0
 
     # Agentes con más escaladas
@@ -156,13 +150,34 @@ def _build_report_data(
     satisfaction = {"score": None, "responses": 0, "note": "Encuesta post-conversación pendiente de implementar"}
 
     # 8. Pacientes nuevos vs recurrentes
-    new_patients = db.query(func.count(Patient.id)).filter(
-        Patient.created_at >= since, Patient.created_at <= until
-    ).scalar() or 0
+    patient_filters = [
+        Patient.created_at >= datetime.combine(since, datetime.min.time()),
+        Patient.created_at <= datetime.combine(until, datetime.max.time()),
+    ]
 
-    recurrent = db.query(func.count(Patient.id)).filter(
-        Patient.is_recurrent == 1
-    ).scalar() or 0
+    new_patients = db.query(func.count(Patient.id)).filter(*patient_filters).scalar() or 0
+
+    recurrent = db.query(func.count(Patient.id)).filter(*patient_filters, Patient.is_recurrent == 1).scalar() or 0
+
+    analytics_filters = [
+        AnalyticsEvent.created_at >= datetime.combine(since, datetime.min.time()),
+        AnalyticsEvent.created_at <= datetime.combine(until, datetime.max.time()),
+    ]
+    if channel:
+        analytics_filters.append(AnalyticsEvent.channel == channel)
+
+    top_interests = db.query(
+        cast(AnalyticsEvent.metadata_json["service"], String).label("interest"),
+        func.count(AnalyticsEvent.id).label("count")
+    ).filter(
+        *analytics_filters,
+        AnalyticsEvent.event_type.in_(["appointment_created", "payment_sent"]),
+    ).group_by("interest").order_by(func.count(AnalyticsEvent.id).desc()).limit(5).all()
+
+    top_unconverted = db.query(
+        Payment.product_service.label("product"),
+        func.count(Payment.id).label("attempts")
+    ).filter(*payment_filters, Payment.status != "verified").group_by(Payment.product_service).order_by(func.count(Payment.id).desc()).limit(5).all()
 
     analytics_filters = [
         AnalyticsEvent.created_at >= datetime.combine(since, datetime.min.time()),
@@ -415,6 +430,12 @@ def export_excel(
 @router.get("/export/pdf")
 def export_pdf(
     days: int = 30,
+    date_from: date | None = Query(default=None),
+    date_to: date | None = Query(default=None),
+    channel: str | None = Query(default=None),
+    session_status: str | None = Query(default=None),
+    agent_id: int | None = Query(default=None),
+    products: str | None = Query(default=None),
     db: DBSession = Depends(get_db),
     _: Agent = Depends(get_current_agent),
 ):
