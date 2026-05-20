@@ -193,18 +193,18 @@ export default function PaymentsPage() {
                 </p>
             </div>
             ) : (
-            <div className="overflow-x-auto">
-                <table className="w-full text-sm">
+            <div className="overflow-x-auto mobile-scroll-x">
+                <table className="w-full min-w-[1150px] text-sm">
                 <thead className="bg-[#F5F1EB] text-[#0b4c45]">
                     <tr>
-                    <th className="px-4 py-3 text-left font-semibold">Cliente</th>
-                    <th className="px-4 py-3 text-left font-semibold">Producto</th>
-                    <th className="px-4 py-3 text-left font-semibold">Monto</th>
-                    <th className="px-4 py-3 text-left font-semibold">Método</th>
-                    <th className="px-4 py-3 text-left font-semibold">Comprobante</th>
-                    <th className="px-4 py-3 text-left font-semibold">Estado</th>
-                    <th className="px-4 py-3 text-left font-semibold">Notas</th>
-                    <th className="px-4 py-3 text-left font-semibold">Acciones</th>
+                    <th className="px-4 py-3 text-left font-semibold whitespace-nowrap">Cliente</th>
+                    <th className="px-4 py-3 text-left font-semibold whitespace-nowrap">Producto</th>
+                    <th className="px-4 py-3 text-left font-semibold whitespace-nowrap">Monto</th>
+                    <th className="px-4 py-3 text-left font-semibold whitespace-nowrap">Método</th>
+                    <th className="px-4 py-3 text-left font-semibold whitespace-nowrap">Comprobante</th>
+                    <th className="px-4 py-3 text-left font-semibold whitespace-nowrap">Estado</th>
+                    <th className="px-4 py-3 text-left font-semibold whitespace-nowrap">Notas</th>
+                    <th className="px-4 py-3 text-left font-semibold whitespace-nowrap">Acciones</th>
                     </tr>
                 </thead>
 
