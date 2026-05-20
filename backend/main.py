@@ -1,11 +1,21 @@
 """
-backend/main.py — versión actualizada
+backend/main.py
 
-Cambios:
-    1. Logging estructurado según entorno
-    2. Workers de seguimiento, limpieza y outbox integrados como tareas periódicas
-    3. Registro del worker de seguimiento en el lifespan
-    4. Registro de la ruta de pagos /payments
+Aplicación principal FastAPI para LLV Assistant.
+
+Responsabilidades:
+- Configurar logging estructurado.
+- Inicializar WebSocket realtime.
+- Registrar rutas REST y webhook.
+- Ejecutar workers en segundo plano:
+    1. conversation_worker: procesa mensajes entrantes de llv_inbox.
+    2. outbox_worker: envía mensajes pendientes a WhatsApp.
+    3. followup_worker: seguimiento de clientes inactivos.
+    4. session_cleanup_worker: limpieza de sesiones expiradas.
+
+Nota:
+- El conversation_worker debe correr cada pocos segundos.
+- El followup_worker y cleanup_worker pueden correr cada 30 minutos.
 """
 
 from __future__ import annotations
@@ -37,61 +47,93 @@ from app.utils.structured_logger import setup_logging
 
 
 # ── Logging estructurado ──────────────────────────────────────────────────────
+
 setup_logging(settings.app_env)
 logger = logging.getLogger(__name__)
 
 
-# ── Workers periódicos ────────────────────────────────────────────────────────
+# ── Workers en background ─────────────────────────────────────────────────────
 
 async def _run_workers_loop():
     """
-    Loop que ejecuta los workers de mantenimiento cada 30 minutos.
+    Loop principal de workers.
 
-    Ejecuta:
-    - Seguimiento de clientes inactivos.
-    - Limpieza de sesiones expiradas.
-    - Flush del outbox por si quedaron mensajes pendientes.
+    Ejecuta frecuentemente:
+    - conversation_worker: procesa mensajes pendientes de llv_inbox.
+    - outbox_worker: envía respuestas pendientes de llv_outbox.
+
+    Ejecuta cada 30 minutos:
+    - followup_worker: seguimiento de clientes inactivos.
+    - session_cleanup_worker: limpieza de sesiones vencidas.
     """
+
+    from app.workers.conversation_worker import run_conversation_worker
     from app.workers.followup_worker import run_followup_worker
-    from app.workers.session_cleanup_worker import run_cleanup_worker
     from app.workers.outbox_worker import flush_outbox
+    from app.workers.session_cleanup_worker import run_cleanup_worker
 
-    interval_seconds = 30 * 60
+    conversation_interval = max(2, settings.conversation_worker_interval or 5)
+    maintenance_interval = 30 * 60
 
-    # Esperar 1 minuto al arranque para que la app y DB estén listas.
-    await asyncio.sleep(60)
+    last_maintenance_run = 0.0
+
+    # Espera corta para que FastAPI y la DB terminen de levantar.
+    await asyncio.sleep(5)
+
+    logger.info(
+        "Workers activos | conversation_interval=%ss | maintenance_interval=%ss",
+        conversation_interval,
+        maintenance_interval,
+    )
 
     while True:
         try:
-            logger.info("Workers periódicos ejecutándose...")
-
             loop = asyncio.get_running_loop()
 
-            # Seguimiento de clientes inactivos.
-            followup_result = await loop.run_in_executor(
+            # 1. Procesar mensajes entrantes del webhook.
+            conversation_result = await loop.run_in_executor(
                 None,
-                run_followup_worker,
+                run_conversation_worker,
             )
-            logger.info("Followup worker | %s", followup_result)
 
-            # Limpieza de sesiones expiradas.
-            cleanup_result = await loop.run_in_executor(
-                None,
-                run_cleanup_worker,
-            )
-            logger.info("Cleanup worker | %s", cleanup_result)
+            if (
+                conversation_result.get("processed")
+                or conversation_result.get("failed")
+                or conversation_result.get("skipped")
+            ):
+                logger.info("Conversation worker | %s", conversation_result)
 
-            # Flush outbox residual.
+            # 2. Enviar respuestas pendientes a WhatsApp.
             outbox_result = await loop.run_in_executor(
                 None,
                 flush_outbox,
             )
-            logger.info("Outbox worker | %s", outbox_result)
+
+            if outbox_result.get("sent") or outbox_result.get("failed"):
+                logger.info("Outbox worker | %s", outbox_result)
+
+            # 3. Workers de mantenimiento cada 30 minutos.
+            now = loop.time()
+
+            if now - last_maintenance_run >= maintenance_interval:
+                followup_result = await loop.run_in_executor(
+                    None,
+                    run_followup_worker,
+                )
+                logger.info("Followup worker | %s", followup_result)
+
+                cleanup_result = await loop.run_in_executor(
+                    None,
+                    run_cleanup_worker,
+                )
+                logger.info("Cleanup worker | %s", cleanup_result)
+
+                last_maintenance_run = now
 
         except Exception as exc:
-            logger.exception("Error en workers periódicos: %s", exc)
+            logger.exception("Error en loop de workers: %s", exc)
 
-        await asyncio.sleep(interval_seconds)
+        await asyncio.sleep(conversation_interval)
 
 
 @asynccontextmanager
@@ -99,29 +141,40 @@ async def lifespan(app: FastAPI):
     """
     Ciclo de vida de FastAPI.
 
-    - Configura loop para WebSocket realtime.
-    - Inicia workers periódicos.
-    - Cancela workers al apagar la app.
+    Al iniciar:
+    - Configura el loop para realtime WebSocket.
+    - Inicia workers en background.
+
+    Al apagar:
+    - Cancela el task de workers correctamente.
     """
+
     logger.info("🚀 %s | env=%s", settings.app_name, settings.app_env)
 
     loop = asyncio.get_running_loop()
+
     realtime_manager.set_loop(loop)
     logger.info("⚡ Realtime WebSocket listo")
 
     worker_task = asyncio.create_task(_run_workers_loop())
-    logger.info("🔄 Workers periódicos iniciados cada 30 minutos")
 
-    yield
-
-    worker_task.cancel()
+    logger.info(
+        "🔄 Workers iniciados | conversación cada %ss",
+        settings.conversation_worker_interval,
+    )
 
     try:
-        await worker_task
-    except asyncio.CancelledError:
-        pass
+        yield
 
-    logger.info("🛑 Workers detenidos correctamente")
+    finally:
+        worker_task.cancel()
+
+        try:
+            await worker_task
+        except asyncio.CancelledError:
+            pass
+
+        logger.info("🛑 Workers detenidos correctamente")
 
 
 # ── App ───────────────────────────────────────────────────────────────────────
