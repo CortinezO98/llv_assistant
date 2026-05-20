@@ -66,15 +66,13 @@
   }
 
   p,
-  span,
-  div,
   h1,
   h2,
   h3,
   h4,
   h5,
   h6 {
-    overflow-wrap: anywhere;
+    overflow-wrap: break-word;
   }
 
   table {
@@ -160,6 +158,11 @@
 
   .mobile-full {
     width: 100%;
+  }
+
+  .text-safe {
+    overflow-wrap: break-word;
+    word-break: break-word;
   }
 }
 
