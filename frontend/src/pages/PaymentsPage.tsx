@@ -135,7 +135,7 @@ export default function PaymentsPage() {
     ]
 
     return (
-        <div className="p-6 max-w-7xl mx-auto">
+        <div className="page-mobile p-4 sm:p-6 max-w-7xl mx-auto w-full min-w-0">
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between mb-6">
             <div>
             <h1 className="font-display text-2xl font-bold text-[#0b4c45]">

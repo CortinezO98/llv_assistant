@@ -90,7 +90,7 @@ export default function AgentsPage() {
     <div className="p-6 max-w-6xl mx-auto">
 
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-6">
         <div>
           <h1 className="font-display text-2xl font-bold text-[#0b4c45]">Agentes</h1>
           <p className="text-sm text-[#7a6a55] mt-0.5">
