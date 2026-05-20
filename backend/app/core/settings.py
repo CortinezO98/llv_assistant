@@ -24,21 +24,28 @@ class Settings(BaseSettings):
             "http://localhost:5175",
             "http://localhost:3000",
         ]
+
         if v is None or v == "":
             return defaults
+
         if isinstance(v, list):
             return [o.strip() for o in v if o.strip()] or defaults
+
         if isinstance(v, str):
             v = v.strip()
+
             if not v:
                 return defaults
+
             if v.startswith("["):
                 try:
                     result = json.loads(v)
                     return result if result else defaults
                 except Exception:
                     pass
+
             return [o.strip() for o in v.split(",") if o.strip()] or defaults
+
         return defaults
 
     # Base de datos
@@ -60,11 +67,16 @@ class Settings(BaseSettings):
     gemini_api_key: str = ""
     gemini_model: str = "gemini-2.5-flash-preview-04-17"
 
-    # WhatsApp
+    # WhatsApp / Meta Cloud API
     whatsapp_token: str = ""
     whatsapp_phone_number_id: str = ""
     whatsapp_business_account_id: str = ""
     webhook_verify_token: str = "llv_webhook_verify_2024"
+
+    # App Secret de Meta.
+    # Se usa para validar la firma X-Hub-Signature-256 del webhook.
+    # Si está vacío, el webhook funcionará sin validar firma.
+    whatsapp_app_secret: str = ""
 
     # Plan y alertas
     plan_monthly_limit: int = 1500
