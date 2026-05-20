@@ -136,11 +136,12 @@ export default function PaymentsPage() {
 
     return (
         <div className="page-mobile p-4 sm:p-6 max-w-7xl mx-auto w-full min-w-0">
-        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between mb-6">
-            <div>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between mb-6">
+            <div className="min-w-0">
             <h1 className="font-display text-2xl font-bold text-[#0b4c45]">
                 Pagos
             </h1>
+
             <p className="text-sm text-[#7a6a55] mt-0.5">
                 Verificación operativa de comprobantes, ATH Móvil, Zelle y otros pagos.
             </p>
@@ -148,7 +149,7 @@ export default function PaymentsPage() {
 
             <button
             onClick={loadPayments}
-            className="btn-primary"
+            className="btn-primary w-full sm:w-auto justify-center"
             disabled={loading}
             >
             ↻ Actualizar
@@ -156,7 +157,7 @@ export default function PaymentsPage() {
         </div>
 
         <div className="card p-4 mb-5">
-            <div className="grid grid-cols-1 md:grid-cols-[240px_1fr] gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-[240px_1fr] gap-3">
             <select
                 className="input"
                 value={status}
@@ -188,6 +189,7 @@ export default function PaymentsPage() {
                 <p className="text-[#0b4c45] font-semibold">
                 No hay pagos para mostrar.
                 </p>
+
                 <p className="text-sm text-[#7a6a55] mt-1">
                 Cambia los filtros o espera nuevos comprobantes.
                 </p>
@@ -197,42 +199,61 @@ export default function PaymentsPage() {
                 <table className="w-full min-w-[1150px] text-sm">
                 <thead className="bg-[#F5F1EB] text-[#0b4c45]">
                     <tr>
-                    <th className="px-4 py-3 text-left font-semibold whitespace-nowrap">Cliente</th>
-                    <th className="px-4 py-3 text-left font-semibold whitespace-nowrap">Producto</th>
-                    <th className="px-4 py-3 text-left font-semibold whitespace-nowrap">Monto</th>
-                    <th className="px-4 py-3 text-left font-semibold whitespace-nowrap">Método</th>
-                    <th className="px-4 py-3 text-left font-semibold whitespace-nowrap">Comprobante</th>
-                    <th className="px-4 py-3 text-left font-semibold whitespace-nowrap">Estado</th>
-                    <th className="px-4 py-3 text-left font-semibold whitespace-nowrap">Notas</th>
-                    <th className="px-4 py-3 text-left font-semibold whitespace-nowrap">Acciones</th>
+                    <th className="px-4 py-3 text-left font-semibold whitespace-nowrap">
+                        Cliente
+                    </th>
+                    <th className="px-4 py-3 text-left font-semibold whitespace-nowrap">
+                        Producto
+                    </th>
+                    <th className="px-4 py-3 text-left font-semibold whitespace-nowrap">
+                        Monto
+                    </th>
+                    <th className="px-4 py-3 text-left font-semibold whitespace-nowrap">
+                        Método
+                    </th>
+                    <th className="px-4 py-3 text-left font-semibold whitespace-nowrap">
+                        Comprobante
+                    </th>
+                    <th className="px-4 py-3 text-left font-semibold whitespace-nowrap">
+                        Estado
+                    </th>
+                    <th className="px-4 py-3 text-left font-semibold whitespace-nowrap">
+                        Notas
+                    </th>
+                    <th className="px-4 py-3 text-left font-semibold whitespace-nowrap">
+                        Acciones
+                    </th>
                     </tr>
                 </thead>
 
                 <tbody>
                     {payments.map((payment) => (
                     <tr key={payment.id} className="table-row align-top">
-                        <td className="px-4 py-3">
-                        <p className="font-semibold text-[#1a1208]">
+                        <td className="px-4 py-3 min-w-[190px]">
+                        <p className="font-semibold text-[#1a1208] max-w-[180px] truncate">
                             {payment.patient_name || 'Cliente'}
                         </p>
-                        <p className="text-xs text-[#7a6a55]">
+
+                        <p className="text-xs text-[#7a6a55] whitespace-nowrap">
                             {payment.whatsapp_number || 'Sin WhatsApp'}
                         </p>
-                        <p className="text-[11px] text-[#7a6a55] mt-1">
+
+                        <p className="text-[11px] text-[#7a6a55] mt-1 whitespace-nowrap">
                             ID pago: #{payment.id}
                         </p>
                         </td>
 
-                        <td className="px-4 py-3">
-                        <p className="font-medium text-[#1a1208]">
-                            {payment.product_service}
+                        <td className="px-4 py-3 min-w-[190px]">
+                        <p className="font-medium text-[#1a1208] max-w-[220px] truncate">
+                            {payment.product_service || '—'}
                         </p>
-                        <p className="text-xs text-[#7a6a55]">
+
+                        <p className="text-xs text-[#7a6a55] whitespace-nowrap">
                             {payment.created_at || 'Sin fecha'}
                         </p>
                         </td>
 
-                        <td className="px-4 py-3">
+                        <td className="px-4 py-3 whitespace-nowrap">
                         <span className="font-bold text-[#0b4c45]">
                             {payment.amount !== null
                             ? `$${payment.amount.toFixed(2)} ${payment.currency || 'USD'}`
@@ -240,39 +261,47 @@ export default function PaymentsPage() {
                         </span>
                         </td>
 
-                        <td className="px-4 py-3">
+                        <td className="px-4 py-3 whitespace-nowrap">
                         <span className="badge bg-[#F5F1EB] text-[#0b4c45]">
                             {METHOD_LABELS[payment.payment_method] || payment.payment_method}
                         </span>
                         </td>
 
-                        <td className="px-4 py-3">
+                        <td className="px-4 py-3 min-w-[180px]">
                         {payment.proof_media_id ? (
                             <div>
-                            <p className="text-xs font-mono text-[#0b4c45]">
+                            <p className="text-xs font-mono text-[#0b4c45] max-w-[170px] truncate">
                                 {payment.proof_media_id}
                             </p>
-                            <p className="text-[11px] text-[#7a6a55] mt-1">
+
+                            <p className="text-[11px] text-[#7a6a55] mt-1 whitespace-nowrap">
                                 Media ID recibido por WhatsApp
                             </p>
                             </div>
                         ) : (
-                            <span className="text-[#7a6a55]">Sin comprobante</span>
+                            <span className="text-[#7a6a55] whitespace-nowrap">
+                            Sin comprobante
+                            </span>
                         )}
                         </td>
 
-                        <td className="px-4 py-3">
-                        <span className={`badge ${STATUS_CLASSES[payment.status] || 'bg-gray-100 text-gray-700'}`}>
+                        <td className="px-4 py-3 whitespace-nowrap">
+                        <span
+                            className={`badge ${
+                            STATUS_CLASSES[payment.status] || 'bg-gray-100 text-gray-700'
+                            }`}
+                        >
                             {STATUS_LABELS[payment.status] || payment.status}
                         </span>
+
                         {payment.verified_by_agent_name && (
-                            <p className="text-[11px] text-[#7a6a55] mt-1">
+                            <p className="text-[11px] text-[#7a6a55] mt-1 max-w-[150px] truncate">
                             Por: {payment.verified_by_agent_name}
                             </p>
                         )}
                         </td>
 
-                        <td className="px-4 py-3 min-w-[220px]">
+                        <td className="px-4 py-3 min-w-[260px]">
                         <textarea
                             className="input min-h-[72px] text-xs"
                             value={notes[payment.id] ?? ''}
@@ -292,7 +321,7 @@ export default function PaymentsPage() {
                         )}
                         </td>
 
-                        <td className="px-4 py-3">
+                        <td className="px-4 py-3 whitespace-nowrap">
                         <div className="flex flex-col gap-2 min-w-[150px]">
                             <button
                             className="btn-primary justify-center"

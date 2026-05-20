@@ -126,9 +126,9 @@ function DeliveryTable() {
     }
 
     return (
-        <div>
+        <div className="min-w-0">
         <div className="card p-4 mb-5">
-            <div className="grid grid-cols-1 md:grid-cols-[220px_1fr] gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-[220px_1fr] gap-3">
             <select
                 className="input"
                 value={filter}
@@ -152,7 +152,7 @@ function DeliveryTable() {
         </div>
 
         <div className="card overflow-hidden">
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto mobile-scroll-x">
             <table className="w-full min-w-[1000px]">
                 <thead>
                 <tr className="border-b border-[#e5ddd4] bg-[#F5F1EB]/50">
@@ -180,40 +180,59 @@ function DeliveryTable() {
                 <tbody>
                 {loading ? (
                     <tr>
-                    <td colSpan={9} className="text-center py-12 text-sm text-[#7a6a55]">
+                    <td
+                        colSpan={9}
+                        className="text-center py-12 text-sm text-[#7a6a55]"
+                    >
                         Cargando entregas...
                     </td>
                     </tr>
                 ) : filteredItems.length === 0 ? (
                     <tr>
-                    <td colSpan={9} className="text-center py-12 text-sm text-[#7a6a55]">
+                    <td
+                        colSpan={9}
+                        className="text-center py-12 text-sm text-[#7a6a55]"
+                    >
                         Sin entregas para mostrar.
                     </td>
                     </tr>
                 ) : (
                     filteredItems.map((delivery) => (
                     <tr key={delivery.id} className="table-row">
-                        <td className="px-4 py-3 text-sm font-semibold text-[#1a1208] whitespace-nowrap">
-                        {delivery.patient_name}
+                        <td className="px-4 py-3 min-w-[190px]">
+                        <p className="text-sm font-semibold text-[#1a1208] max-w-[180px] truncate">
+                            {delivery.patient_name || 'Cliente'}
+                        </p>
+
+                        <p className="text-[11px] text-[#7a6a55] whitespace-nowrap">
+                            ID entrega: #{delivery.id}
+                        </p>
                         </td>
 
                         <td className="px-4 py-3 text-xs font-mono text-[#7a6a55] whitespace-nowrap">
-                        {delivery.phone}
+                        {delivery.phone || '—'}
                         </td>
 
-                        <td className="px-4 py-3 text-xs text-[#0b4c45] max-w-[180px] truncate">
-                        {delivery.service_treatment}
+                        <td className="px-4 py-3 min-w-[180px]">
+                        <p
+                            className="text-xs text-[#0b4c45] max-w-[180px] truncate"
+                            title={delivery.service_treatment}
+                        >
+                            {delivery.service_treatment || '—'}
+                        </p>
                         </td>
 
                         <td className="px-4 py-3 text-sm font-bold text-[#0b4c45] whitespace-nowrap">
-                        {delivery.amount_to_pay ? `$${delivery.amount_to_pay}` : '—'}
+                        {delivery.amount_to_pay
+                            ? `$${delivery.amount_to_pay}`
+                            : '—'}
                         </td>
 
                         <td className="px-4 py-3 text-sm text-[#7a6a55] whitespace-nowrap">
-                        {delivery.delivery_town}
+                        {delivery.delivery_town || '—'}
                         </td>
 
-                        <td className="px-4 py-3">
+                        <td className="px-4 py-3 min-w-[150px]">
                         {editing === delivery.id ? (
                             <input
                             className="input text-xs w-36"
@@ -227,13 +246,13 @@ function DeliveryTable() {
                             placeholder="Nombre carrero"
                             />
                         ) : (
-                            <span className="text-xs text-[#7a6a55]">
+                            <span className="text-xs text-[#7a6a55] whitespace-nowrap">
                             {delivery.assigned_carrier || '—'}
                             </span>
                         )}
                         </td>
 
-                        <td className="px-4 py-3">
+                        <td className="px-4 py-3 min-w-[150px]">
                         {editing === delivery.id ? (
                             <input
                             type="date"
@@ -253,7 +272,7 @@ function DeliveryTable() {
                         )}
                         </td>
 
-                        <td className="px-4 py-3">
+                        <td className="px-4 py-3 whitespace-nowrap">
                         {editing === delivery.id ? (
                             <select
                             className="input text-xs w-32"
@@ -265,29 +284,33 @@ function DeliveryTable() {
                                 })
                             }
                             >
-                            {Object.entries(deliveryStatusLabels).map(([value, label]) => (
+                            {Object.entries(deliveryStatusLabels).map(
+                                ([value, label]) => (
                                 <option key={value} value={value}>
-                                {label}
+                                    {label}
                                 </option>
-                            ))}
+                                )
+                            )}
                             </select>
                         ) : (
                             <span
                             className={`badge ${
-                                deliveryStatusColors[delivery.status] || 'bg-gray-100 text-gray-700'
+                                deliveryStatusColors[delivery.status] ||
+                                'bg-gray-100 text-gray-700'
                             }`}
                             >
-                            {deliveryStatusLabels[delivery.status] || delivery.status}
+                            {deliveryStatusLabels[delivery.status] ||
+                                delivery.status}
                             </span>
                         )}
                         </td>
 
-                        <td className="px-4 py-3">
+                        <td className="px-4 py-3 whitespace-nowrap">
                         {editing === delivery.id ? (
                             <div className="flex gap-1">
                             <button
                                 onClick={() => save(delivery.id)}
-                                className="btn-primary py-1 px-2 text-xs"
+                                className="btn-primary py-1 px-2 text-xs w-auto"
                             >
                                 ✓
                             </button>
@@ -297,7 +320,7 @@ function DeliveryTable() {
                                 setEditing(null)
                                 setEditData({})
                                 }}
-                                className="btn-ghost py-1 px-2 text-xs"
+                                className="btn-ghost py-1 px-2 text-xs w-auto"
                             >
                                 ✕
                             </button>
@@ -307,12 +330,13 @@ function DeliveryTable() {
                             onClick={() => {
                                 setEditing(delivery.id)
                                 setEditData({
-                                assigned_carrier: delivery.assigned_carrier || '',
+                                assigned_carrier:
+                                    delivery.assigned_carrier || '',
                                 delivery_date: delivery.delivery_date || '',
                                 status: delivery.status,
                                 })
                             }}
-                            className="btn-ghost py-1 px-2 text-xs border border-[#e5ddd4]"
+                            className="btn-ghost py-1 px-2 text-xs border border-[#e5ddd4] w-auto"
                             >
                             ✏️ Editar
                             </button>
@@ -388,9 +412,9 @@ function ShipmentTable() {
     }
 
     return (
-        <div>
+        <div className="min-w-0">
         <div className="card p-4 mb-5">
-            <div className="grid grid-cols-1 md:grid-cols-[220px_1fr] gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-[220px_1fr] gap-3">
             <select
                 className="input"
                 value={filter}
@@ -414,7 +438,7 @@ function ShipmentTable() {
         </div>
 
         <div className="card overflow-hidden">
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto mobile-scroll-x">
             <table className="w-full min-w-[1050px]">
                 <thead>
                 <tr className="border-b border-[#e5ddd4] bg-[#F5F1EB]/50">
@@ -443,52 +467,72 @@ function ShipmentTable() {
                 <tbody>
                 {loading ? (
                     <tr>
-                    <td colSpan={10} className="text-center py-12 text-sm text-[#7a6a55]">
+                    <td
+                        colSpan={10}
+                        className="text-center py-12 text-sm text-[#7a6a55]"
+                    >
                         Cargando envíos...
                     </td>
                     </tr>
                 ) : filteredItems.length === 0 ? (
                     <tr>
-                    <td colSpan={10} className="text-center py-12 text-sm text-[#7a6a55]">
+                    <td
+                        colSpan={10}
+                        className="text-center py-12 text-sm text-[#7a6a55]"
+                    >
                         Sin envíos para mostrar.
                     </td>
                     </tr>
                 ) : (
                     filteredItems.map((shipment) => (
                     <tr key={shipment.id} className="table-row">
-                        <td className="px-4 py-3 text-sm font-semibold text-[#1a1208] whitespace-nowrap">
-                        {shipment.patient_name}
+                        <td className="px-4 py-3 min-w-[190px]">
+                        <p className="text-sm font-semibold text-[#1a1208] max-w-[180px] truncate">
+                            {shipment.patient_name || 'Cliente'}
+                        </p>
+
+                        <p className="text-[11px] text-[#7a6a55] whitespace-nowrap">
+                            ID envío: #{shipment.id}
+                        </p>
                         </td>
 
                         <td className="px-4 py-3 text-xs font-mono text-[#7a6a55] whitespace-nowrap">
-                        {shipment.phone}
+                        {shipment.phone || '—'}
                         </td>
 
-                        <td className="px-4 py-3 text-xs text-[#7a6a55] max-w-[140px] truncate">
+                        <td className="px-4 py-3 text-xs text-[#7a6a55] max-w-[150px] truncate">
                         {shipment.email || '—'}
                         </td>
 
-                        <td className="px-4 py-3 text-xs text-[#7a6a55] max-w-[190px]">
-                        <div className="truncate">
-                            {shipment.postal_address}
+                        <td className="px-4 py-3 text-xs text-[#7a6a55] max-w-[210px]">
+                        <div
+                            className="truncate"
+                            title={shipment.postal_address}
+                        >
+                            {shipment.postal_address || '—'}
                         </div>
 
                         <div className="text-[10px] text-[#7a6a55] truncate">
-                            {[shipment.city, shipment.state_province, shipment.country, shipment.zip_code]
+                            {[
+                            shipment.city,
+                            shipment.state_province,
+                            shipment.country,
+                            shipment.zip_code,
+                            ]
                             .filter(Boolean)
-                            .join(', ')}
+                            .join(', ') || '—'}
                         </div>
                         </td>
 
-                        <td className="px-4 py-3 text-xs text-[#0b4c45] max-w-[160px] truncate">
-                        {shipment.service_treatment}
+                        <td className="px-4 py-3 text-xs text-[#0b4c45] max-w-[170px] truncate">
+                        {shipment.service_treatment || '—'}
                         </td>
 
                         <td className="px-4 py-3 text-sm font-bold text-[#0b4c45] whitespace-nowrap">
                         {shipment.amount_paid ? `$${shipment.amount_paid}` : '—'}
                         </td>
 
-                        <td className="px-4 py-3">
+                        <td className="px-4 py-3 min-w-[130px]">
                         {editing === shipment.id ? (
                             <input
                             className="input text-xs w-28"
@@ -502,13 +546,13 @@ function ShipmentTable() {
                             placeholder="USPS, UPS..."
                             />
                         ) : (
-                            <span className="text-xs text-[#7a6a55]">
+                            <span className="text-xs text-[#7a6a55] whitespace-nowrap">
                             {shipment.carrier || '—'}
                             </span>
                         )}
                         </td>
 
-                        <td className="px-4 py-3">
+                        <td className="px-4 py-3 min-w-[140px]">
                         {editing === shipment.id ? (
                             <input
                             className="input text-xs w-32"
@@ -523,7 +567,7 @@ function ShipmentTable() {
                             />
                         ) : (
                             <span
-                            className={`text-xs font-mono ${
+                            className={`text-xs font-mono whitespace-nowrap ${
                                 shipment.tracking_number
                                 ? 'text-[#0b4c45] font-semibold'
                                 : 'text-[#7a6a55]'
@@ -534,7 +578,7 @@ function ShipmentTable() {
                         )}
                         </td>
 
-                        <td className="px-4 py-3">
+                        <td className="px-4 py-3 whitespace-nowrap">
                         {editing === shipment.id ? (
                             <select
                             className="input text-xs w-32"
@@ -546,29 +590,33 @@ function ShipmentTable() {
                                 })
                             }
                             >
-                            {Object.entries(shipmentStatusLabels).map(([value, label]) => (
+                            {Object.entries(shipmentStatusLabels).map(
+                                ([value, label]) => (
                                 <option key={value} value={value}>
-                                {label}
+                                    {label}
                                 </option>
-                            ))}
+                                )
+                            )}
                             </select>
                         ) : (
                             <span
                             className={`badge ${
-                                shipmentStatusColors[shipment.status] || 'bg-gray-100 text-gray-700'
+                                shipmentStatusColors[shipment.status] ||
+                                'bg-gray-100 text-gray-700'
                             }`}
                             >
-                            {shipmentStatusLabels[shipment.status] || shipment.status}
+                            {shipmentStatusLabels[shipment.status] ||
+                                shipment.status}
                             </span>
                         )}
                         </td>
 
-                        <td className="px-4 py-3">
+                        <td className="px-4 py-3 whitespace-nowrap">
                         {editing === shipment.id ? (
                             <div className="flex gap-1">
                             <button
                                 onClick={() => save(shipment.id)}
-                                className="btn-primary py-1 px-2 text-xs"
+                                className="btn-primary py-1 px-2 text-xs w-auto"
                             >
                                 ✓
                             </button>
@@ -578,7 +626,7 @@ function ShipmentTable() {
                                 setEditing(null)
                                 setEditData({})
                                 }}
-                                className="btn-ghost py-1 px-2 text-xs"
+                                className="btn-ghost py-1 px-2 text-xs w-auto"
                             >
                                 ✕
                             </button>
@@ -588,12 +636,13 @@ function ShipmentTable() {
                             onClick={() => {
                                 setEditing(shipment.id)
                                 setEditData({
-                                tracking_number: shipment.tracking_number || '',
+                                tracking_number:
+                                    shipment.tracking_number || '',
                                 carrier: shipment.carrier || '',
                                 status: shipment.status,
                                 })
                             }}
-                            className="btn-ghost py-1 px-2 text-xs border border-[#e5ddd4]"
+                            className="btn-ghost py-1 px-2 text-xs border border-[#e5ddd4] w-auto"
                             >
                             ✏️ Editar
                             </button>
@@ -617,21 +666,21 @@ export default function DeliveriesPage() {
 
     return (
         <div className="page-mobile p-4 sm:p-6 max-w-7xl mx-auto w-full min-w-0">
-        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-6">
-            <div>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between mb-6">
+            <div className="min-w-0">
             <h1 className="font-display text-2xl font-bold text-[#0b4c45]">
                 Entregas y Envíos
             </h1>
 
-            <p className="text-sm text-[#7a6a55] mt-0.5">
+            <p className="text-sm text-[#7a6a55] mt-0.5 break-words">
                 Gestión operativa de entregas en Puerto Rico y envíos postales.
             </p>
             </div>
 
-            <div className="flex gap-1 bg-[#F5F1EB] p-1 rounded-xl">
+            <div className="grid grid-cols-2 gap-1 bg-[#F5F1EB] p-1 rounded-xl w-full sm:w-auto">
             <button
                 onClick={() => setTab('deliveries')}
-                className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+                className={`px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all truncate ${
                 tab === 'deliveries'
                     ? 'bg-[#0b4c45] text-white shadow-sm'
                     : 'text-[#7a6a55] hover:text-[#0b4c45]'
@@ -642,7 +691,7 @@ export default function DeliveriesPage() {
 
             <button
                 onClick={() => setTab('shipments')}
-                className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+                className={`px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all truncate ${
                 tab === 'shipments'
                     ? 'bg-[#0b4c45] text-white shadow-sm'
                     : 'text-[#7a6a55] hover:text-[#0b4c45]'

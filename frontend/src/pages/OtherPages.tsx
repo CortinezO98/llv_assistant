@@ -209,14 +209,14 @@ export function PatientsPage() {
   }
 
   return (
-    <div className="p-6 max-w-5xl mx-auto">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-6">
-        <div>
+    <div className="page-mobile p-4 sm:p-6 max-w-5xl mx-auto w-full min-w-0">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between mb-6">
+        <div className="min-w-0">
           <h1 className="font-display text-2xl font-bold text-brand-800">Pacientes</h1>
           <p className="text-sm text-[#6b8a78] mt-0.5">{patients.length} registrados en total</p>
         </div>
         <input
-          className="input max-w-xs"
+          className="input w-full sm:max-w-xs"
           placeholder="🔍 Buscar nombre o número..."
           value={search}
           onChange={e => setSearch(e.target.value)}
@@ -224,7 +224,8 @@ export function PatientsPage() {
       </div>
 
       <div className="card overflow-hidden">
-        <table className="w-full">
+        <div className="overflow-x-auto mobile-scroll-x">
+          <table className="w-full min-w-[850px]">
           <thead>
             <tr className="border-b border-[#e4ede8] bg-brand-50/50">
               {['Paciente', 'WhatsApp', 'Ubicación', 'Tipo', 'Última interacción'].map(h => (
@@ -266,7 +267,8 @@ export function PatientsPage() {
               </tr>
             ))}
           </tbody>
-        </table>
+          </table>
+        </div>
       </div>
     </div>
   )
@@ -426,7 +428,7 @@ export function PlanPage() {
   }
 
   return (
-    <div className="p-6 max-w-5xl mx-auto">
+    <div className="page-mobile p-4 sm:p-6 max-w-5xl mx-auto w-full min-w-0">
       {/* ── Header ─────────────────────────────────────────────────── */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-6">
         <div>
@@ -446,7 +448,7 @@ export function PlanPage() {
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 w-full sm:w-auto">
           <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold ${
             usage?.service_active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
           }`}>
@@ -471,12 +473,12 @@ export function PlanPage() {
       </div>
 
       {/* ── Tabs ───────────────────────────────────────────────────── */}
-      <div className="flex gap-1 bg-[#F5F1EB] p-1 rounded-xl mb-6 flex-wrap">
+      <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-1 bg-[#F5F1EB] p-1 rounded-xl mb-6 w-full">
         {TABS.map(t => (
           <button
             key={t.id}
             onClick={() => setTab(t.id)}
-            className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+            className={`px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all truncate ${
               tab === t.id ? 'bg-[#0b4c45] text-white shadow-sm' : 'text-[#7a6a55] hover:text-[#0b4c45]'
             }`}
           >
@@ -548,7 +550,7 @@ export function PlanPage() {
             )}
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {[
               ['Base del plan', `${(usage?.base_limit ?? 0).toLocaleString()} conv/mes`],
               ['Extras agregados', usage?.extra_conversations > 0 ? `+${(usage?.extra_conversations ?? 0).toLocaleString()}` : '—'],
@@ -570,7 +572,7 @@ export function PlanPage() {
             <div className="bg-purple-50 border border-purple-200 rounded-2xl p-5">
               <h3 className="text-sm font-bold text-purple-800 mb-1">⚡ Acciones rápidas — Superadmin</h3>
               <p className="text-xs text-purple-600 mb-4">Cambios inmediatos sobre el plan activo del cliente.</p>
-              <div className="flex flex-wrap gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <button
                   onClick={() => setShowRenew(!showRenew)}
                   className="bg-[#0b4c45] hover:bg-[#0d5c54] text-white font-semibold px-4 py-2.5 rounded-xl text-sm transition-all"
@@ -654,7 +656,7 @@ export function PlanPage() {
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-6">
             {PLANES.map(plan => (
               <div
                 key={plan.id}
@@ -820,7 +822,7 @@ export function PlanPage() {
           {isSuperAdmin && (
             <div className="card p-5">
               <h3 className="font-semibold text-[#0b4c45] mb-3">📝 Cantidad personalizada</h3>
-              <div className="grid grid-cols-3 gap-3 mb-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3">
                 <div>
                   <label className="block text-xs font-semibold text-[#7a6a55] mb-1">Conversaciones</label>
                   <input
@@ -845,7 +847,7 @@ export function PlanPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3 mb-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
                 <div>
                   <label className="block text-xs font-semibold text-[#7a6a55] mb-1">Referencia de pago</label>
                   <input
@@ -905,9 +907,9 @@ export function PlanPage() {
             {ADDONS.map(cat => (
               <div key={cat.categoria}>
                 <h3 className="font-semibold text-[#0b4c45] mb-3">{cat.categoria}</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
                   {cat.items.map(item => (
-                    <div key={item.nombre} className="bg-white rounded-xl border border-[#e5ddd4] p-4 flex items-start justify-between gap-3">
+                    <div key={item.nombre} className="bg-white rounded-xl border border-[#e5ddd4] p-4 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 min-w-0">
                       <div className="flex-1 min-w-0">
                         <div className="font-semibold text-sm text-[#0b4c45]">{item.nombre}</div>
                         <div className="text-xs text-[#7a6a55] mt-0.5">{item.desc}</div>

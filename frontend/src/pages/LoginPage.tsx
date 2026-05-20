@@ -5,6 +5,7 @@ import { LOGO_GOLD_FULL, LOGO_MONO_WHITE } from '../assets/logos'
 
 // animate.css via CDN — loaded once
 const ANIMATE_CSS = 'https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css'
+
 if (!document.querySelector(`link[href="${ANIMATE_CSS}"]`)) {
   const link = document.createElement('link')
   link.rel = 'stylesheet'
@@ -51,7 +52,7 @@ export default function LoginPage() {
     >
       <div className="min-h-screen grid lg:grid-cols-[1.08fr_0.92fr]">
         {/* Panel izquierdo – identidad de marca */}
-        <section className="relative hidden lg:flex flex-col justify-between overflow-hidden bg-[#0b4c45] px-14 py-12">
+        <section className="relative hidden lg:flex flex-col justify-between overflow-hidden bg-[#0b4c45] px-10 xl:px-14 py-10 xl:py-12">
           {/* Decoración de fondo */}
           <div className="absolute inset-0 opacity-[0.07]">
             <div className="absolute -top-24 -left-24 h-80 w-80 rounded-full bg-[#C6A96B] blur-3xl" />
@@ -72,7 +73,7 @@ export default function LoginPage() {
             <img
               src={LOGO_GOLD_FULL}
               alt="LLV Aesthetic & Wellness Clinic"
-              className="h-14 object-contain object-left"
+              className="h-12 xl:h-14 object-contain object-left"
               style={{
                 filter: 'drop-shadow(0 12px 24px rgba(0,0,0,0.2))',
               }}
@@ -86,7 +87,7 @@ export default function LoginPage() {
             </div>
 
             <h1
-              className="max-w-xl text-5xl font-extrabold leading-[1.02] tracking-[-0.04em] text-white"
+              className="max-w-xl text-4xl xl:text-5xl font-extrabold leading-[1.02] tracking-[-0.04em] text-white"
               style={{ fontFamily: "'Syne', sans-serif" }}
             >
               Conversaciones, citas y entregas en un solo lugar.
@@ -122,7 +123,7 @@ export default function LoginPage() {
             </div>
           </div>
 
-          <div className="relative z-10 flex items-center justify-between border-t border-white/10 pt-6 animate__animated animate__fadeIn animate__delay-1s">
+          <div className="relative z-10 flex items-center justify-between gap-4 border-t border-white/10 pt-6 animate__animated animate__fadeIn animate__delay-1s">
             <p className="text-xs text-white/50">
               LLV Assistant · Sistema privado de gestión
             </p>
@@ -135,34 +136,34 @@ export default function LoginPage() {
         </section>
 
         {/* Panel derecho – formulario */}
-        <section className="relative flex min-h-screen items-center justify-center px-5 py-10 sm:px-8">
+        <section className="relative flex min-h-screen items-center justify-center overflow-y-auto px-4 py-6 sm:px-8 sm:py-10">
           {/* Fondo decorativo sutil */}
           <div className="absolute inset-0 pointer-events-none">
             <div className="absolute top-0 right-0 w-64 h-64 rounded-full bg-[#C6A96B]/10 blur-3xl" />
             <div className="absolute bottom-0 left-0 w-80 h-80 rounded-full bg-[#0b4c45]/5 blur-3xl" />
           </div>
 
-          <div className="relative w-full max-w-[480px]">
+          <div className="relative w-full max-w-[480px] min-w-0">
             {/* Logo móvil */}
-            <div className="mb-8 flex justify-center lg:hidden">
-              <div className="rounded-2xl bg-[#0b4c45] px-6 py-4 shadow-xl shadow-[#0b4c45]/20">
+            <div className="mb-6 flex justify-center lg:hidden">
+              <div className="rounded-2xl bg-[#0b4c45] px-5 py-3 shadow-xl shadow-[#0b4c45]/20">
                 <img
                   src={LOGO_MONO_WHITE}
                   alt="LLV Assistant"
-                  className="h-10 object-contain"
+                  className="h-9 object-contain"
                 />
               </div>
             </div>
 
-            <div className="rounded-[2rem] border border-[#e5ddd4] bg-white/95 p-6 shadow-[0_24px_80px_rgba(11,76,69,0.12)] backdrop-blur-xl sm:p-8 animate__animated animate__fadeInUp">
-              <div className="mb-7">
-                <div className="mb-4 inline-flex items-center gap-2 rounded-full bg-[#F5F1EB] px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.16em] text-[#7a6a55]">
+            <div className="rounded-[1.5rem] sm:rounded-[2rem] border border-[#e5ddd4] bg-white/95 p-5 shadow-[0_24px_80px_rgba(11,76,69,0.12)] backdrop-blur-xl sm:p-8 animate__animated animate__fadeInUp">
+              <div className="mb-6 sm:mb-7">
+                <div className="mb-4 inline-flex items-center gap-2 rounded-full bg-[#F5F1EB] px-3 py-1.5 text-[10px] sm:text-[11px] font-bold uppercase tracking-[0.14em] sm:tracking-[0.16em] text-[#7a6a55]">
                   <span className="h-1.5 w-1.5 rounded-full bg-[#0b4c45]" />
                   Acceso seguro
                 </div>
 
                 <h2
-                  className="text-3xl font-extrabold tracking-[-0.04em] text-[#0b4c45]"
+                  className="text-2xl sm:text-3xl font-extrabold tracking-[-0.04em] text-[#0b4c45]"
                   style={{ fontFamily: "'Syne', sans-serif" }}
                 >
                   Bienvenido de nuevo
@@ -177,10 +178,11 @@ export default function LoginPage() {
               {error && (
                 <div className="mb-5 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 animate__animated animate__fadeIn">
                   <div className="flex items-start gap-3">
-                    <span className="mt-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-red-100 text-xs font-bold">
+                    <span className="mt-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-red-100 text-xs font-bold flex-shrink-0">
                       !
                     </span>
-                    <p>{error}</p>
+
+                    <p className="break-words">{error}</p>
                   </div>
                 </div>
               )}
@@ -214,15 +216,15 @@ export default function LoginPage() {
                       type="email"
                       autoComplete="email"
                       value={email}
-                      onChange={e => setEmail(e.target.value)}
+                      onChange={(e) => setEmail(e.target.value)}
                       placeholder="usuario@llvclinic.com"
-                      className="w-full rounded-2xl border border-[#e5ddd4] bg-white px-12 py-3.5 text-sm text-[#10231f] outline-none transition-all placeholder:text-[#b8aa98] focus:border-[#C6A96B] focus:ring-4 focus:ring-[#C6A96B]/20"
+                      className="w-full rounded-2xl border border-[#e5ddd4] bg-white px-12 py-3.5 text-base sm:text-sm text-[#10231f] outline-none transition-all placeholder:text-[#b8aa98] focus:border-[#C6A96B] focus:ring-4 focus:ring-[#C6A96B]/20"
                     />
                   </div>
                 </div>
 
                 <div>
-                  <div className="mb-2 flex items-center justify-between">
+                  <div className="mb-2 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
                     <label
                       htmlFor="password"
                       className="block text-xs font-bold uppercase tracking-[0.13em] text-[#7a6a55]"
@@ -255,14 +257,14 @@ export default function LoginPage() {
                       type={showPw ? 'text' : 'password'}
                       autoComplete="current-password"
                       value={password}
-                      onChange={e => setPassword(e.target.value)}
+                      onChange={(e) => setPassword(e.target.value)}
                       placeholder="••••••••••••"
-                      className="w-full rounded-2xl border border-[#e5ddd4] bg-white px-12 py-3.5 pr-14 text-sm text-[#10231f] outline-none transition-all placeholder:text-[#b8aa98] focus:border-[#C6A96B] focus:ring-4 focus:ring-[#C6A96B]/20"
+                      className="w-full rounded-2xl border border-[#e5ddd4] bg-white px-12 py-3.5 pr-14 text-base sm:text-sm text-[#10231f] outline-none transition-all placeholder:text-[#b8aa98] focus:border-[#C6A96B] focus:ring-4 focus:ring-[#C6A96B]/20"
                     />
 
                     <button
                       type="button"
-                      onClick={() => setShowPw(v => !v)}
+                      onClick={() => setShowPw((v) => !v)}
                       className="absolute right-3 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-xl text-[#7a6a55] transition hover:bg-[#F5F1EB] hover:text-[#0b4c45]"
                       aria-label={showPw ? 'Ocultar contraseña' : 'Mostrar contraseña'}
                     >
@@ -297,12 +299,12 @@ export default function LoginPage() {
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between gap-3">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
                   <label className="flex cursor-pointer items-center gap-2 text-xs font-medium text-[#7a6a55]">
                     <input
                       type="checkbox"
                       checked={remember}
-                      onChange={e => setRemember(e.target.checked)}
+                      onChange={(e) => setRemember(e.target.checked)}
                       className="h-4 w-4 rounded border-[#d8cbbb] text-[#0b4c45] focus:ring-[#0b4c45]"
                     />
                     Mantener sesión activa
@@ -378,11 +380,12 @@ export default function LoginPage() {
                     </svg>
                   </div>
 
-                  <div>
+                  <div className="min-w-0">
                     <p className="text-xs font-bold uppercase tracking-[0.12em] text-[#7a6a55]">
                       Acceso protegido
                     </p>
-                    <p className="mt-1 text-xs leading-5 text-[#7a6a55]">
+
+                    <p className="mt-1 text-xs leading-5 text-[#7a6a55] break-words">
                       Este panel es exclusivo para personal autorizado. Toda la
                       actividad queda asociada al usuario autenticado.
                     </p>
@@ -391,7 +394,7 @@ export default function LoginPage() {
               </div>
             </div>
 
-            <p className="mt-6 text-center text-xs text-[#7a6a55]/80">
+            <p className="mt-6 text-center text-xs text-[#7a6a55]/80 break-words">
               ¿Problemas para ingresar?{' '}
               <a
                 href="mailto:jcortinezosorio@gmail.com"

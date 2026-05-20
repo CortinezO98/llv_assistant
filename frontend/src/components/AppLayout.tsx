@@ -112,7 +112,7 @@ export default function AppLayout() {
   const SidebarContent = () => (
     <>
       {/* Logo */}
-      <div className="px-5 py-5 border-b border-white/10">
+      <div className="px-5 py-5 border-b border-white/10 flex-shrink-0">
         <div className="flex items-center gap-2.5">
           <div
             className="w-8 h-8 rounded-lg flex items-center justify-center font-display font-bold text-xs flex-shrink-0"
@@ -133,7 +133,7 @@ export default function AppLayout() {
       </div>
 
       {/* Rol */}
-      <div className="px-4 py-2.5 border-b border-white/10">
+      <div className="px-4 py-2.5 border-b border-white/10 flex-shrink-0">
         <span
           className="text-[10px] font-semibold tracking-wider uppercase px-2 py-1 rounded-md"
           style={{
@@ -149,7 +149,7 @@ export default function AppLayout() {
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 px-3 py-3 space-y-0.5 overflow-y-auto">
+      <nav className="flex-1 px-3 py-3 space-y-0.5 overflow-y-auto min-h-0">
         {visibleItems.map(({ to, label, Icon, badge }) => (
           <NavLink
             key={to}
@@ -183,7 +183,7 @@ export default function AppLayout() {
       </nav>
 
       {/* Perfil */}
-      <div className="px-3 py-4 border-t border-white/10">
+      <div className="px-3 py-4 border-t border-white/10 flex-shrink-0">
         <div
           className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl"
           style={{ background: 'rgba(255,255,255,0.07)' }}
@@ -221,7 +221,7 @@ export default function AppLayout() {
 
   return (
     <div
-      className="min-h-screen overflow-hidden"
+      className="min-h-screen w-full overflow-hidden"
       style={{ background: '#f8f6f2' }}
     >
       {/* Header mobile */}
@@ -276,24 +276,20 @@ export default function AppLayout() {
 
       {/* Sidebar mobile */}
       <aside
-        className={`lg:hidden fixed top-0 bottom-0 left-0 w-[82vw] max-w-[310px] flex flex-col z-50 transition-transform duration-200 ${
+        className={`lg:hidden fixed top-0 bottom-0 left-0 w-[84vw] max-w-[310px] flex flex-col z-50 transition-transform duration-200 ease-out ${
           mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
         style={{ background: '#0b4c45' }}
       >
-        <div className="flex items-center justify-between pr-3">
-          <div className="flex-1">
-            <SidebarContent />
-          </div>
+        <button
+          onClick={closeMobileMenu}
+          className="absolute top-3 right-3 w-9 h-9 rounded-xl flex items-center justify-center text-white bg-white/10 z-10"
+          aria-label="Cerrar menú"
+        >
+          ✕
+        </button>
 
-          <button
-            onClick={closeMobileMenu}
-            className="absolute top-3 right-3 w-9 h-9 rounded-xl flex items-center justify-center text-white bg-white/10"
-            aria-label="Cerrar menú"
-          >
-            ✕
-          </button>
-        </div>
+        <SidebarContent />
       </aside>
 
       {/* Contenido */}
